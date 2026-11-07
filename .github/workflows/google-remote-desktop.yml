@@ -27,6 +27,7 @@ jobs:
 
       - name: Kullanici Oturumunu Hazirla
         run: |
+          sudo groupadd -f chrome-remote-desktop
           sudo usermod -aG chrome-remote-desktop $USER
           echo "exec /etc/X11/Xsession /usr/bin/xfce4-session" > ~/.chrome-remote-desktop-session
           sudo bash -c 'echo "exec /etc/X11/Xsession /usr/bin/xfce4-session" > /etc/chrome-remote-desktop-session'
@@ -39,14 +40,12 @@ jobs:
           PIN: ${{ github.event.inputs.pin }}
         run: |
           CODE=$(echo "$CRD_CMD" | grep -oP '(?<=--code=")[^"]+')
-          sudo -u $USER -E env DISPLAY= /opt/google/chrome-remote-desktop/start-host \
+          DISPLAY= /opt/google/chrome-remote-desktop/start-host \
             --code="$CODE" \
             --redirect-url="https://remotedesktop.google.com/_/oauthredirect" \
             --name="ChromeOS-Cloud" --pin="$PIN"
-          sudo systemctl restart chrome-remote-desktop@$USER || sudo service chrome-remote-desktop restart
-          sleep 10
-          systemctl status chrome-remote-desktop@$USER --no-pager || true
-          tail -n 30 /tmp/chrome_remote_desktop_* 2>/dev/null || true
+          sleep 5
+          tail -n 50 /tmp/chrome_remote_desktop_* 2>/dev/null || true
 
       - name: Oturumu 6 Saat Acik Tut
         run: sleep 21600
