@@ -7,7 +7,7 @@ on:
         description: 'Google Remote Desktop Kodunuz'
         required: true
       pin:
-        description: 'Baglanti PIN Kodu (6 haneli)'
+        description: 'PIN (6 haneli)'
         required: true
         default: '123456'
 
@@ -15,24 +15,38 @@ jobs:
   remote-desktop:
     runs-on: ubuntu-22.04
     timeout-minutes: 360
-
     steps:
-      - name: CRD ve Desktop Kur
+      - name: CRD ve XFCE Kur
         run: |
           sudo apt-get update
-          wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
-          sudo sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list'
           curl -sL https://dl.google.com/linux/direct/chrome-remote-desktop_current_amd64.deb -o crd.deb
-          sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install --assume-yes ./crd.deb xfce4 xfce4-terminal desktop-base google-chrome-stable dbus-x11
+          curl -sL https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb -o chrome.deb
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ./crd.deb ./chrome.deb xfce4 xfce4-goodies xfce4-terminal desktop-base dbus-x11 xscreensaver
+          sudo apt-get remove -y gnome-terminal || true
+          sudo systemctl disable lightdm.service || true
+
+      - name: Kullanici Oturumunu Hazirla
+        run: |
+          sudo usermod -aG chrome-remote-desktop $USER
+          echo "exec /etc/X11/Xsession /usr/bin/xfce4-session" > ~/.chrome-remote-desktop-session
           sudo bash -c 'echo "exec /etc/X11/Xsession /usr/bin/xfce4-session" > /etc/chrome-remote-desktop-session'
+          mkdir -p ~/.config/chrome-remote-desktop
+          chmod 700 ~/.config/chrome-remote-desktop
 
       - name: Yetkilendir ve Baslat
+        env:
+          CRD_CMD: ${{ github.event.inputs.crd_code }}
+          PIN: ${{ github.event.inputs.pin }}
         run: |
-          ${{ github.event.inputs.crd_code }} --pin=${{ github.event.inputs.pin }}
-          sudo service chrome-remote-desktop start
+          CODE=$(echo "$CRD_CMD" | grep -oP '(?<=--code=")[^"]+')
+          sudo -u $USER -E env DISPLAY= /opt/google/chrome-remote-desktop/start-host \
+            --code="$CODE" \
+            --redirect-url="https://remotedesktop.google.com/_/oauthredirect" \
+            --name="ChromeOS-Cloud" --pin="$PIN"
+          sudo systemctl restart chrome-remote-desktop@$USER || sudo service chrome-remote-desktop restart
+          sleep 10
+          systemctl status chrome-remote-desktop@$USER --no-pager || true
+          tail -n 30 /tmp/chrome_remote_desktop_* 2>/dev/null || true
 
       - name: Oturumu 6 Saat Acik Tut
-        run: |
-          echo "Google Chrome Remote Desktop baslatildi ve baglantiya hazir!"
-          sleep 21600
+        run: sleep 21600
