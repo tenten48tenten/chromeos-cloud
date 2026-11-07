@@ -5,53 +5,72 @@ on:
 
 jobs:
   desktop:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 360
 
     steps:
+      - name: Depoyu Indir
+        uses: actions/checkout@v3
+
       - name: Paketleri ve Masaustu Ortamini Kur
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb x11vnc novnc websockify openbox tint2 chromium-browser dbus-x11
+          sudo apt-get install -y xvfb x11vnc novnc websockify openbox tint2 chromium-browser dbus-x11 curl
 
       - name: Cloudflared (Web Tuneli) Kur
         run: |
           curl -L --output cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
           sudo dpkg -i cloudflared.deb
 
-      - name: Sanal Ekrani ve ChromeOS Deneyimini Baslat
+      - name: Sanal Ekrani ve noVNC Baslat
         run: |
-          # 1. Sanal ekran (1280x800 - tipik Chromebook cozunurlugu)
           export DISPLAY=:1
           Xvfb :1 -screen 0 1280x800x24 &
           sleep 2
-
-          # 2. Hafif pencere yoneticisi ve panel
           openbox &
           tint2 &
           sleep 1
-
-          # 3. Google Chromium Tarayici (ChromeOS Modu)
           chromium-browser --no-sandbox --start-maximized --disable-dev-shm-usage https://www.google.com &
-
-          # 4. VNC Sunucusu
           x11vnc -display :1 -nopw -listen localhost -xkb -ncache 10 -ncache_cr -forever &
-          sleep 2
-
-          # 5. noVNC Web Arayuzu
           websockify --web=/usr/share/novnc/ 6080 localhost:5900 &
           sleep 2
 
-          # 6. Guvenli Cloudflare Web Tuneli
+          # Cloudflare tunelini baslat
           cloudflared tunnel --url http://localhost:6080 --logfile /tmp/tunnel.log &
-          sleep 8
+          
+          # Link olusana kadar bekle (en fazla 30 saniye)
+          LINK=""
+          for i in {1..30}; do
+            LINK=$(grep -o 'https://[-a-z0-9]*\.trycloudflare\.com' /tmp/tunnel.log | head -n 1 || true)
+            if [ -n "$LINK" ]; then
+              break
+            fi
+            sleep 1
+          done
 
-          echo "=================================================================="
-          echo "CANLI WEB GIRIS LINKINIZ:"
-          grep -o 'https://[-a-z0-9]*\.trycloudflare\.com' /tmp/tunnel.log | head -n 1 | awk '{print $1 "/vnc.html?autoconnect=true&resize=remote"}'
-          echo "=================================================================="
+          FULL_LINK="$LINK/vnc.html?autoconnect=true&resize=remote"
+          echo "BULUNAN LINK: $FULL_LINK"
+
+          # README.md dosyasina dev linki yaz ve depoya gonder
+          git config --global user.name "Cloud Bot"
+          git config --global user.email "bot@cloud.local"
+          cat <<EOF > README.md
+          # 🚀 Canlı ChromeOS Masaüstünüz Hazır!
+
+          Aşağıdaki bağlantıya tıklayarak doğrudan tarayıcınızın içinde ChromeOS / masaüstünü kullanabilirsiniz:
+
+          ## 👉 [CANLI MASAÜSTÜNÜ AÇMAK İÇİN BURAYA TIKLAYIN]($FULL_LINK)
+
+          * **Bağlantı Türü:** noVNC Web GUI (Kurulum / Şifre gerekmez)
+          * **Oturum Süresi:** 6 Saat
+          * **Çözünürlük:** 1280x800 HD
+          EOF
+
+          git add README.md
+          git commit -m "Update live web desktop link" || true
+          git push https://${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:main || true
 
       - name: Oturumu Acik Tut (6 Saat)
         run: |
-          echo "Masaustu hazir ve calisiyor..."
+          echo "Masaustu hazir ve calisiyor!"
           sleep 21600
