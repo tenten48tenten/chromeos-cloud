@@ -3,6 +3,9 @@ name: ChromeOS Web Cloud Desktop
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   desktop:
     runs-on: ubuntu-22.04
@@ -35,12 +38,10 @@ jobs:
           websockify --web=/usr/share/novnc/ 6080 localhost:5900 &
           sleep 2
 
-          # Cloudflare tunelini baslat
           cloudflared tunnel --url http://localhost:6080 --logfile /tmp/tunnel.log &
           
-          # Link olusana kadar bekle (en fazla 30 saniye)
           LINK=""
-          for i in {1..30}; do
+          for i in {1..35}; do
             LINK=$(grep -o 'https://[-a-z0-9]*\.trycloudflare\.com' /tmp/tunnel.log | head -n 1 || true)
             if [ -n "$LINK" ]; then
               break
@@ -49,15 +50,12 @@ jobs:
           done
 
           FULL_LINK="$LINK/vnc.html?autoconnect=true&resize=remote"
-          echo "BULUNAN LINK: $FULL_LINK"
+          echo "### 🚀 [CANLI MASAUSTUNE BAGLANMAK ICIN BURAYA TIKLA]($FULL_LINK)" >> $GITHUB_STEP_SUMMARY
 
-          # README.md dosyasina dev linki yaz ve depoya gonder
           git config --global user.name "Cloud Bot"
           git config --global user.email "bot@cloud.local"
           cat <<EOF > README.md
           # 🚀 Canlı ChromeOS Masaüstünüz Hazır!
-
-          Aşağıdaki bağlantıya tıklayarak doğrudan tarayıcınızın içinde ChromeOS / masaüstünü kullanabilirsiniz:
 
           ## 👉 [CANLI MASAÜSTÜNÜ AÇMAK İÇİN BURAYA TIKLAYIN]($FULL_LINK)
 
@@ -67,8 +65,8 @@ jobs:
           EOF
 
           git add README.md
-          git commit -m "Update live web desktop link" || true
-          git push https://${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:main || true
+          git commit -m "Update live link: $FULL_LINK"
+          git push
 
       - name: Oturumu Acik Tut (6 Saat)
         run: |
