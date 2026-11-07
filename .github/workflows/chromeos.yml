@@ -8,37 +8,24 @@ permissions:
 
 jobs:
   desktop:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     timeout-minutes: 360
 
     steps:
       - name: Depoyu Indir
         uses: actions/checkout@v3
 
-      - name: Paketleri ve Masaustu Ortamini Kur
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y xvfb x11vnc novnc websockify openbox tint2 chromium-browser dbus-x11 curl
-
-      - name: Cloudflared (Web Tuneli) Kur
+      - name: Cloudflared Kur
         run: |
           curl -L --output cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
           sudo dpkg -i cloudflared.deb
 
-      - name: Sanal Ekrani ve noVNC Baslat
+      - name: Docker Chromium Web Desktop Baslat
         run: |
-          export DISPLAY=:1
-          Xvfb :1 -screen 0 1280x800x24 &
-          sleep 2
-          openbox &
-          tint2 &
-          sleep 1
-          chromium-browser --no-sandbox --start-maximized --disable-dev-shm-usage https://www.google.com &
-          x11vnc -display :1 -nopw -listen localhost -xkb -ncache 10 -ncache_cr -forever &
-          websockify --web=/usr/share/novnc/ 6080 localhost:5900 &
-          sleep 2
+          docker run -d --name=chrome -p 3000:3000 --shm-size="2gb" -e PUID=1000 -e PGID=1000 lscr.io/linuxserver/chromium:latest
+          sleep 8
 
-          cloudflared tunnel --url http://localhost:6080 --logfile /tmp/tunnel.log &
+          cloudflared tunnel --url http://localhost:3000 --logfile /tmp/tunnel.log &
           
           LINK=""
           for i in {1..35}; do
@@ -49,23 +36,24 @@ jobs:
             sleep 1
           done
 
-          FULL_LINK="$LINK/vnc.html?autoconnect=true&resize=remote"
-          echo "### 🚀 [CANLI MASAUSTUNE BAGLANMAK ICIN BURAYA TIKLA]($FULL_LINK)" >> $GITHUB_STEP_SUMMARY
+          echo "LINK: $LINK"
 
           git config --global user.name "Cloud Bot"
           git config --global user.email "bot@cloud.local"
           cat <<EOF > README.md
-          # 🚀 Canlı ChromeOS Masaüstünüz Hazır!
+          # 🚀 Canlı ChromeOS Web Masaüstünüz Hazır!
 
-          ## 👉 [CANLI MASAÜSTÜNÜ AÇMAK İÇİN BURAYA TIKLAYIN]($FULL_LINK)
+          Doğrudan tarayıcınızda kullanmak için aşağıdaki bağlantıya tıklayın:
 
-          * **Bağlantı Türü:** noVNC Web GUI (Kurulum / Şifre gerekmez)
-          * **Oturum Süresi:** 6 Saat
-          * **Çözünürlük:** 1280x800 HD
+          ## 👉 [CANLI MASAÜSTÜNÜ AÇMAK İÇİN BURAYA TIKLAYIN]($LINK)
+
+          * **Sistem:** Google Chromium / ChromeOS Cloud Desktop
+          * **Giriş:** Şifresiz / Tek Tıkla Bağlantı
+          * **Süre:** 6 Saat Kesintisiz
           EOF
 
           git add README.md
-          git commit -m "Update live link: $FULL_LINK"
+          git commit -m "Live link: $LINK"
           git push
 
       - name: Oturumu Acik Tut (6 Saat)
