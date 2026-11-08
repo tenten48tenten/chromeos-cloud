@@ -1,0 +1,1719 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aegis Mesh VPN — Parsec & Tailscale Hızında Özel Ağ</title>
+  <style>
+    :root {
+      --bg-primary: #090d16;
+      --bg-secondary: #111827;
+      --bg-card: #161f33;
+      --bg-card-hover: #1d2842;
+      --border: #263554;
+      --text-main: #f3f6fc;
+      --text-muted: #94a3b8;
+      --accent: #10b981;
+      --accent-glow: rgba(16, 185, 129, 0.35);
+      --blue: #3b82f6;
+      --purple: #8b5cf6;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+    }
+
+    body {
+      background: radial-gradient(circle at top right, #13213c 0%, var(--bg-primary) 65%);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      overflow-x: hidden;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 265px;
+      background: rgba(17, 24, 39, 0.92);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 22px 16px;
+      flex-shrink: 0;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 6px 10px 22px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 18px;
+    }
+
+    .brand-logo {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #10b981, #3b82f6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 20px;
+      color: #fff;
+      box-shadow: 0 4px 15px rgba(16, 185, 129, 0.35);
+    }
+
+    .brand-title h1 {
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+    }
+
+    .brand-title span {
+      font-size: 11px;
+      color: var(--accent);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+    }
+
+    .nav-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex: 1;
+    }
+
+    .nav-btn {
+      width: 100%;
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      padding: 12px 14px;
+      border-radius: 11px;
+      text-align: left;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      transition: all 0.2s;
+    }
+
+    .nav-btn:hover {
+      background: rgba(59, 130, 246, 0.08);
+      color: var(--text-main);
+    }
+
+    .nav-btn.active {
+      background: linear-gradient(90deg, rgba(16, 185, 129, 0.16), rgba(59, 130, 246, 0.08));
+      border-color: rgba(16, 185, 129, 0.4);
+      color: #fff;
+    }
+
+    .sidebar-footer {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      font-size: 12px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .badge-green {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.35);
+    }
+
+    .badge-blue {
+      background: rgba(59, 130, 246, 0.15);
+      color: #60a5fa;
+      border: 1px solid rgba(59, 130, 246, 0.35);
+    }
+
+    .badge-amber {
+      background: rgba(245, 158, 11, 0.15);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.35);
+    }
+
+    .badge-red {
+      background: rgba(239, 68, 68, 0.15);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.35);
+    }
+
+    /* Main Content */
+    .main {
+      flex: 1;
+      padding: 26px 32px;
+      overflow-y: auto;
+      max-height: 100vh;
+    }
+
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .top-bar h2 {
+      font-size: 22px;
+      font-weight: 700;
+    }
+
+    .top-bar p {
+      color: var(--text-muted);
+      font-size: 13px;
+      margin-top: 3px;
+    }
+
+    .tab-panel {
+      display: none;
+    }
+
+    .tab-panel.active {
+      display: block;
+    }
+
+    /* Grid layouts */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 22px;
+    }
+
+    @media (max-width: 980px) {
+      body { flex-direction: column; }
+      .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border); }
+      .dashboard-grid { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 22px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+    }
+
+    .card-title {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* Connect Orb */
+    .connect-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      padding: 18px 10px;
+    }
+
+    .power-btn {
+      width: 156px;
+      height: 156px;
+      border-radius: 50%;
+      border: 4px solid #2b3b5e;
+      background: radial-gradient(circle, #1e293b 0%, #0f172a 100%);
+      color: #94a3b8;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 0 35px rgba(0, 0, 0, 0.5);
+      margin-bottom: 18px;
+      position: relative;
+    }
+
+    .power-btn:hover {
+      transform: scale(1.04);
+      border-color: var(--blue);
+      color: #fff;
+    }
+
+    .power-btn.connected {
+      border-color: var(--accent);
+      background: radial-gradient(circle, rgba(16, 185, 129, 0.28) 0%, #0f172a 85%);
+      color: #10b981;
+      box-shadow: 0 0 45px var(--accent-glow), inset 0 0 25px rgba(16, 185, 129, 0.25);
+    }
+
+    .power-btn svg {
+      width: 48px;
+      height: 48px;
+      stroke: currentColor;
+    }
+
+    .power-label {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+    }
+
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .stat-mini {
+      background: rgba(15, 23, 42, 0.65);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+    }
+
+    .stat-mini .label {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .stat-mini .value {
+      font-size: 18px;
+      font-weight: 800;
+      margin-top: 4px;
+      color: #fff;
+    }
+
+    .stat-mini .sub {
+      font-size: 11px;
+      color: var(--accent);
+      margin-top: 2px;
+    }
+
+    /* Form Controls */
+    .form-group {
+      margin-bottom: 14px;
+      text-align: left;
+      width: 100%;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    .input, select, textarea {
+      width: 100%;
+      background: #0b111e;
+      border: 1px solid var(--border);
+      color: var(--text-main);
+      padding: 10px 13px;
+      border-radius: 10px;
+      font-size: 13px;
+      outline: none;
+    }
+
+    .input:focus, select:focus, textarea:focus {
+      border-color: var(--blue);
+    }
+
+    .btn {
+      background: var(--blue);
+      color: #fff;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s;
+    }
+
+    .btn:hover {
+      filter: brightness(1.1);
+    }
+
+    .btn-green {
+      background: var(--accent);
+    }
+
+    .btn-outline {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border);
+      color: var(--text-main);
+    }
+
+    .btn-outline:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .btn-danger {
+      background: rgba(239, 68, 68, 0.18);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #fca5a5;
+    }
+
+    /* Device List */
+    .device-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .device-item {
+      background: rgba(15, 23, 42, 0.65);
+      border: 1px solid var(--border);
+      border-radius: 13px;
+      padding: 15px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .device-info {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .device-icon {
+      width: 42px;
+      height: 42px;
+      border-radius: 10px;
+      background: rgba(59, 130, 246, 0.15);
+      border: 1px solid rgba(59, 130, 246, 0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+
+    .device-meta h4 {
+      font-size: 15px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .device-meta p {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 3px;
+      font-family: Consolas, monospace;
+    }
+
+    .device-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    /* Code blocks */
+    .code-box {
+      background: #070b13;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      font-family: Consolas, 'Courier New', monospace;
+      font-size: 12px;
+      color: #a7f3d0;
+      overflow-x: auto;
+      white-space: pre;
+      max-height: 320px;
+      line-height: 1.5;
+    }
+
+    /* Modal */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(5, 8, 15, 0.78);
+      backdrop-filter: blur(5px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 20px;
+    }
+
+    .modal-backdrop.open {
+      display: flex;
+    }
+
+    .modal {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      width: 100%;
+      max-width: 680px;
+      padding: 24px;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+
+    .qr-box {
+      background: #fff;
+      padding: 14px;
+      border-radius: 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .step-box {
+      background: rgba(15, 23, 42, 0.7);
+      border-left: 4px solid var(--accent);
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 14px;
+    }
+
+    .step-box h4 {
+      font-size: 14px;
+      margin-bottom: 5px;
+      color: #fff;
+    }
+
+    .step-box p {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 22px;
+      right: 22px;
+      background: #10b981;
+      color: #042f2e;
+      font-weight: 700;
+      padding: 12px 20px;
+      border-radius: 12px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+      display: none;
+      z-index: 2000;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- SOL MENÜ -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-logo">Æ</div>
+      <div class="brand-title">
+        <h1>AEGIS MESH</h1>
+        <span>Parsec & Tailscale VPN</span>
+      </div>
+    </div>
+
+    <ul class="nav-list">
+      <li>
+        <button class="nav-btn active" onclick="switchTab('dashboard', this)">
+          <span>⚡</span> Hızlı Bağlantı & Ağ
+        </button>
+      </li>
+      <li>
+        <button class="nav-btn" onclick="switchTab('turbo', this)">
+          <span>🚀</span> Turbo Film & Dosya İndirici
+        </button>
+      </li>
+      <li>
+        <button class="nav-btn" onclick="switchTab('adblock', this)">
+          <span>🚫</span> Reklam & İzleyici Kalkanı
+        </button>
+      </li>
+      <li>
+        <button class="nav-btn" onclick="switchTab('devices', this)">
+          <span>🛡️</span> Cihazlarım (Özel Mesh)
+        </button>
+      </li>
+      <li>
+        <button class="nav-btn" onclick="switchTab('dpi', this)">
+          <span>🕵️</span> DPI & Engel Kalkanı
+        </button>
+      </li>
+      <li>
+        <button class="nav-btn" onclick="switchTab('cloud', this)">
+          <span>☁️</span> 7/24 Ücretsiz Bulut Kurulumu
+        </button>
+      </li>
+    </ul>
+
+    <div class="sidebar-footer">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+        <span style="color:var(--text-muted);">Zero-Trust Kalkanı</span>
+        <span class="badge badge-green">AKTİF</span>
+      </div>
+      <div style="color:var(--text-muted); font-size:11px; line-height:1.4;">
+        Ağ: <strong id="sideNetworkName" style="color:#fff;">Aegis-Ozel-Mesh</strong><br/>
+        Alt Ağ: <code style="color:#60a5fa;">100.64.0.0/10</code>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ANA İÇERİK -->
+  <main class="main">
+    <div class="top-bar">
+      <div>
+        <h2 id="pageTitle">Hızlı Bağlantı & Mesh Tünel Kontrolü</h2>
+        <p id="pageSub">Parsec/Tailscale gibi doğrudan P2P düşük gecikmeli ve AmneziaWG/WSS ile hiçbir engele takılmayan özel VPN ağınız.</p>
+      </div>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <span id="connStatusBadge" class="badge badge-amber">● BAĞLANTI BEKLENİYOR</span>
+        <button class="btn btn-outline" onclick="runDiagnostics()">🔍 Canlı Gecikme & DPI Testi</button>
+        <button class="btn btn-danger" onclick="shutdownApp()">🛑 VPN'i & Uygulamayı Kapat</button>
+      </div>
+    </div>
+
+    <!-- SEKME 1: DASHBOARD -->
+    <section id="tab-dashboard" class="tab-panel active">
+      <div class="dashboard-grid">
+        <!-- Sol: Bağlantı Küresi -->
+        <div class="card connect-box">
+          <div style="width:100%; display:flex; justify-content:space-between; margin-bottom:8px;">
+            <span class="badge badge-blue">Şifreleme: ChaCha20-Poly1305</span>
+            <span class="badge badge-green" id="mtuBadge">MTU 1380</span>
+          </div>
+
+          <button id="powerBtn" class="power-btn" onclick="toggleConnection()">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+              <line x1="12" y1="2" x2="12" y2="12"></line>
+            </svg>
+            <span class="power-label" id="powerText">BAĞLAN</span>
+          </button>
+
+          <h3 id="virtualIpDisplay" style="font-size:20px; font-weight:800; margin-bottom:4px;">100.64.0.1</h3>
+          <p id="tunnelSubText" style="font-size:12px; color:var(--text-muted); margin-bottom:16px;">
+            Özel Sanal IP Adresiniz (Sadece Sizin Cihazlarınız Erişebilir)
+          </p>
+
+          <div class="form-group">
+            <label>Aktif Tünel & Engel Aşma Modu</label>
+            <select id="protocolSelect" onchange="changeProtocol()">
+              <option value="AmneziaWG + WSS Hibrit (P2P + TLS 443)">🚀 AmneziaWG + WSS Hibrit (Parsec Hızı + Tam Sansür Aşma)</option>
+              <option value="AmneziaWG Stealth UDP (Oyun & Düşük Gecikme)">🎮 AmneziaWG Stealth UDP (Oyun & Ultra Düşük Ping)</option>
+              <option value="Cloudflare WSS TLS 443 (Ağır Güvenlik Duvarı)">🛡️ Cloudflare WSS Port 443 (HTTPS Kamuflajlı Bulut Tünel)</option>
+            </select>
+          </div>
+
+          <div style="width:100%; background:rgba(15,23,42,0.75); border:1px solid var(--border); border-radius:11px; padding:11px 13px; text-align:left; font-size:12px;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+              <span style="color:var(--text-muted);">Yerel SOCKS5/HTTP Tünel:</span>
+              <code id="localProxyLabel" style="color:#34d399;">127.0.0.1:10808</code>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+              <span style="color:var(--text-muted);">STUN Dış Endpoint (P2P):</span>
+              <code id="publicEpLabel" style="color:#60a5fa;">Keşfediliyor...</code>
+            </div>
+            <div style="display:flex; justify-content:space-between;">
+              <span style="color:var(--text-muted);">NAT Delme Durumu:</span>
+              <span id="natTypeLabel" style="color:#fff; font-weight:600;">Hazır</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sağ: Telemetri ve Aktif Cihazlar -->
+        <div style="display:flex; flex-direction:column; gap:20px;">
+          <div class="stats-row">
+            <div class="stat-mini">
+              <div class="label">Mesh Ping (Gecikme)</div>
+              <div class="value" id="pingStat">4 ms</div>
+              <div class="sub">Doğrudan UDP / BBR</div>
+            </div>
+            <div class="stat-mini">
+              <div class="label">İndirilen / Gönderilen</div>
+              <div class="value" id="trafficStat">0 KB / 0 KB</div>
+              <div class="sub" id="uptimeStat">Şifreli Tünel Hazır</div>
+            </div>
+            <div class="stat-mini">
+              <div class="label">Engellenen Reklam & İzleyici</div>
+              <div class="value" id="deviceCountStat" style="color:#34d399;">0 Engellendi</div>
+              <div class="sub" id="adblockDashSub">Agresif Kalkan Aktif</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">
+              <span>🌐 Canlı Özel Ağ Haritası (Tailscale / Parsec Eşleri)</span>
+              <button class="btn btn-green" onclick="openAddDeviceModal()">+ Yeni Cihaz Ekle</button>
+            </div>
+            <div id="dashboardDeviceList" class="device-list"></div>
+          </div>
+
+          <div class="card" style="background:linear-gradient(135deg, rgba(16,185,129,0.1), rgba(59,130,246,0.1));">
+            <div class="card-title" style="margin-bottom:8px;">
+              <span>💡 Telefon veya İkinci Bilgisayarı 30 Saniyede Bağlayın</span>
+              <span class="badge badge-green">Sıfır Ayar</span>
+            </div>
+            <p style="font-size:13px; color:var(--text-muted); line-height:1.5; margin-bottom:12px;">
+              Telefonunuza ücretsiz <strong>AmneziaVPN</strong> veya <strong>WireGuard</strong> uygulamasını indirin, listedeki cihazın yanındaki <strong>"QR Kod & İndir"</strong> butonuna tıklayıp kamerayla okutun. Sadece sizin onayladığınız cihazlar bu ağa girebilir!
+            </p>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+              <button class="btn btn-outline" onclick="switchTab('devices', document.querySelectorAll('.nav-btn')[1])">📱 Cihazları & QR Kodları Yönet</button>
+              <button class="btn btn-outline" onclick="switchTab('cloud', document.querySelectorAll('.nav-btn')[3])">☁️ Ücretsiz 7/24 Bulut Rölesini Kur</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SEKME: TURBO FİLM & DOSYA İNDİRİCİ -->
+    <section id="tab-turbo" class="tab-panel">
+      <div class="card" style="margin-bottom:20px; border-color: rgba(16, 185, 129, 0.45);">
+        <div class="card-title">
+          <span>🚀 Anti-Throttle (Otomatik Durdur-Başlat) 8-Kanallı Turbo Film & Dosya İndirici</span>
+          <span class="badge badge-green">20+ MB/s SABİT HIZ</span>
+        </div>
+        <p style="font-size:13px; color:var(--text-muted); line-height:1.5; margin-bottom:16px;">
+          Film siteleri (<code>fullhdfilmizlesene</code>, <code>filmmakinesi</code>, <code>hdfilmcehennemi</code> vb.) tek bir bağlantıda ilk <strong>20 MB</strong> veriyi tam hızda (20 MB/s) gönderdikten sonra bağlantıyı yavaşlatır. Siz tarayıcıda <em>Durdur &rarr; Başlat</em> yaptığınızda yeni bir <code>Range</code> bağlantısı açıldığı için hız tekrar 20 MB/s'ye çıkar.<br/>
+          <strong>Bu motor, dosyayı otomatik olarak 8 MB'lık küçük parçalara böler ve 8 ayrı kanaldan her 8 MB'da bir bağlantıyı otomatik sıfırlayarak (saniyede 10 kez otomatik Durdur-Başlat yaparak) hızın hiç düşmeden 20+ MB/s sabit kalmasını sağlar!</strong>
+        </p>
+
+        <div class="form-group">
+          <label>İndirme Bağlantısı (Tarayıcıda <code>Ctrl + J</code> ekranında yavaşlayan indirmeye sağ tıklayıp "İndirme bağlantısını kopyala" deyin ve buraya yapıştırın)</label>
+          <input id="turboUrlInput" class="input" type="text" placeholder="https://... (.mp4, .mkv, .zip veya doğrudan indirme linki)" />
+        </div>
+
+        <div style="display:grid; grid-template-columns: 2fr 1fr 1fr; gap:12px;">
+          <div class="form-group">
+            <label>Kaydedilecek Dosya Adı (Boş bırakılırsa otomatik algılanır)</label>
+            <input id="turboFileNameInput" class="input" type="text" placeholder="Örn: Koloni_2021_1080p.mp4" />
+          </div>
+          <div class="form-group">
+            <label>Burst Parça Boyutu (MB)</label>
+            <select id="turboChunkSize">
+              <option value="8" selected>8 MB (20MB Sınırını Aşmaz - Önerilen)</option>
+              <option value="4">4 MB (Çok Sıkı Sunucular İçin)</option>
+              <option value="12">12 MB (Büyük Dosyalar İçin)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Paralel Kanal Sayısı</label>
+            <select id="turboThreads">
+              <option value="8" selected>8 Eşzamanlı Kanal (20+ MB/s)</option>
+              <option value="12">12 Eşzamanlı Kanal (Maksimum Turbo)</option>
+              <option value="4">4 Eşzamanlı Kanal</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:6px;">
+          <button class="btn btn-green" onclick="startTurboDownload()">⚡ Turbo İndirmeyi Başlat (20+ MB/s)</button>
+          <button class="btn btn-danger" onclick="cancelTurboDownload()">⏹️ İndirmeyi Durdur</button>
+          <button class="btn btn-outline" onclick="openDownloadsFolder()">📂 İndirilenler Klasörünü Aç</button>
+        </div>
+
+        <!-- Canlı İlerleme Çubuğu -->
+        <div id="turboProgressBox" style="margin-top:20px; background:rgba(15,23,42,0.85); border:1px solid var(--border); border-radius:14px; padding:18px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <strong id="turboStateLabel" style="color:#fff; font-size:14px;">Hazır — İndirme bağlantısını yapıştırıp başlatın.</strong>
+            <span id="turboSpeedBadge" class="badge badge-green" style="font-size:14px;">0.00 MB/s</span>
+          </div>
+          <div style="width:100%; height:14px; background:#090d16; border-radius:999px; overflow:hidden; border:1px solid var(--border); margin-bottom:8px;">
+            <div id="turboProgressBar" style="width:0%; height:100%; background:linear-gradient(90deg, #10b981, #3b82f6); transition:width 0.3s;"></div>
+          </div>
+          <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--text-muted);">
+            <span id="turboBytesLabel">0 MB / 0 MB (%0)</span>
+            <span id="turboChunksLabel">Tamamlanan Burst Parçası: 0 / 0</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SEKME: AGRESİF REKLAM & İZLEYİCİ ENGELLEYİCİ KALKANI -->
+    <section id="tab-adblock" class="tab-panel">
+      <div class="stats-row" style="grid-template-columns: repeat(4, 1fr); margin-bottom:20px;">
+        <div class="stat-mini" style="border-color:rgba(16,185,129,0.4);">
+          <div class="label">Kalkan Durumu</div>
+          <div class="value" id="abStatusText" style="color:#10b981;">OTOMATİK AKTİF</div>
+          <div class="sub">Tünel + DNS Seviyesi</div>
+        </div>
+        <div class="stat-mini">
+          <div class="label">Engellenen Reklam & Popup</div>
+          <div class="value" id="abAdsCount" style="color:#f87171;">0</div>
+          <div class="sub">Banner, Bahis, Pre-Roll</div>
+        </div>
+        <div class="stat-mini">
+          <div class="label">Engellenen İzleyici (Tracker)</div>
+          <div class="value" id="abTrackersCount" style="color:#fbbf24;">0</div>
+          <div class="sub">Telemetri & Parmak İzi</div>
+        </div>
+        <div class="stat-mini">
+          <div class="label">Kazanılan Hız / Veri Tasarrufu</div>
+          <div class="value" id="abSavedBytes" style="color:#38bdf8;">0 KB</div>
+          <div class="sub">Sıfır Gecikme Sinkhole</div>
+        </div>
+      </div>
+
+      <div class="dashboard-grid" style="grid-template-columns: 1fr 1fr; margin-bottom:20px;">
+        <!-- Sol: Agresif Filtre Anahtarları -->
+        <div class="card" style="border-color:rgba(16,185,129,0.45);">
+          <div class="card-title">
+            <span>🚫 VPN Otomatik Agresif Reklam & İzleyici Filtresi</span>
+            <span id="abBadge" class="badge badge-green">AKTİF</span>
+          </div>
+          <p style="font-size:13px; color:var(--text-muted); line-height:1.5; margin-bottom:16px;">
+            Tarayıcı eklentisine ihtiyaç duymadan, VPN tünelinden geçen tüm reklam, açılır pencere (pop-under), film sitelerindeki bahis/video önü reklamları ve gizli izleyicileri <strong>0.1 milisaniyede</strong> otomatik keser:
+          </p>
+
+          <div style="display:flex; flex-direction:column; gap:12px; margin-bottom:16px;">
+            <label style="display:flex; align-items:center; justify-content:space-between; background:#0b111e; padding:12px 14px; border-radius:11px; border:1px solid var(--border); cursor:pointer;">
+              <div>
+                <strong style="color:#fff; font-size:13px; display:block;">🛡️ VPN Otomatik Reklam Engelleyiciyi Çalıştır</strong>
+                <span style="color:var(--text-muted); font-size:11px;">Tüm HTTP/HTTPS/SOCKS5 tünel trafiğinde reklamları anında bloklar</span>
+              </div>
+              <input id="abEnabledToggle" type="checkbox" checked onchange="saveAdBlockSettings()" style="width:20px; height:20px; accent-color:#10b981;" />
+            </label>
+
+            <label style="display:flex; align-items:center; justify-content:space-between; background:#0b111e; padding:12px 14px; border-radius:11px; border:1px solid var(--border); cursor:pointer;">
+              <div>
+                <strong style="color:#fff; font-size:13px; display:block;">🔥 Agresif Sezgisel (Heuristic) Mod</strong>
+                <span style="color:var(--text-muted); font-size:11px;"><code>ads.*</code>, <code>pop.*</code>, <code>banner.*</code>, <code>telemetry.*</code>, <code>analytics.*</code> alt alan adlarını otomatik yakalar</span>
+              </div>
+              <input id="abAggressiveToggle" type="checkbox" checked onchange="saveAdBlockSettings()" style="width:20px; height:20px; accent-color:#10b981;" />
+            </label>
+
+            <label style="display:flex; align-items:center; justify-content:space-between; background:#0b111e; padding:12px 14px; border-radius:11px; border:1px solid var(--border); cursor:pointer;">
+              <div>
+                <strong style="color:#fff; font-size:13px; display:block;">🎰 Film Siteleri Bahis, Pop-under & Video Önü Reklam Kalkanı</strong>
+                <span style="color:var(--text-muted); font-size:11px;"><code>hdfilmcehennemi</code>, <code>filmmakinesi</code> vb. sitelerdeki <code>fmhdfc.click</code>, <code>exoclick</code>, <code>popads</code> reklamlarını susturur</span>
+              </div>
+              <input id="abPopupToggle" type="checkbox" checked onchange="saveAdBlockSettings()" style="width:20px; height:20px; accent-color:#10b981;" />
+            </label>
+
+            <label style="display:flex; align-items:center; justify-content:space-between; background:#0b111e; padding:12px 14px; border-radius:11px; border:1px solid var(--border); cursor:pointer;">
+              <div>
+                <strong style="color:#fff; font-size:13px; display:block;">👁️ Gizli İzleyici, Telemetri ve Parmak İzi Engelleyici</strong>
+                <span style="color:var(--text-muted); font-size:11px;">Google Analytics, Facebook Pixel, TikTok Tracker, Yandex Metrika, Clarity ve Windows telemetrisini keser</span>
+              </div>
+              <input id="abTrackerToggle" type="checkbox" checked onchange="saveAdBlockSettings()" style="width:20px; height:20px; accent-color:#10b981;" />
+            </label>
+
+            <label style="display:flex; align-items:center; justify-content:space-between; background:#0b111e; padding:12px 14px; border-radius:11px; border:1px solid var(--border); cursor:pointer;">
+              <div>
+                <strong style="color:#fff; font-size:13px; display:block;">📱 Mobil WireGuard & QR Kodlarda AdGuard DNS (94.140.14.14) Kullan</strong>
+                <span style="color:var(--text-muted); font-size:11px;">Telefonda oluşturulan WireGuard/AmneziaWG tünellerine otomatik reklam engelleyici DNS gömer</span>
+              </div>
+              <input id="abMobileDnsToggle" type="checkbox" checked onchange="saveAdBlockSettings()" style="width:20px; height:20px; accent-color:#10b981;" />
+            </label>
+          </div>
+
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button class="btn btn-green" onclick="testAdBlockerNow()">🧪 Canlı Reklam & İzleyici Engelleme Testi Yap</button>
+            <button class="btn btn-outline" onclick="clearAdBlockStats()">🧹 Sayaçları Sıfırla</button>
+          </div>
+        </div>
+
+        <!-- Sağ: Özel Kara Liste & Canlı Engelleme Akışı -->
+        <div style="display:flex; flex-direction:column; gap:18px;">
+          <div class="card">
+            <div class="card-title">
+              <span>➕ Özel Alan Adı Engelle (Kara Liste)</span>
+              <span class="badge badge-blue">Anında Sinkhole</span>
+            </div>
+            <div style="display:flex; gap:8px; margin-bottom:12px;">
+              <input id="customBlockDomainInput" class="input" type="text" placeholder="Örn: reklam.site.com veya fmhdfc.click" />
+              <button class="btn btn-green" onclick="addCustomAdBlockDomain('block')">Engelle</button>
+            </div>
+            <div id="customBlockedPills" style="display:flex; gap:8px; flex-wrap:wrap;"></div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">
+              <span>📡 Canlı Engellenen Reklam & İzleyici Akışı (Gerçek Zamanlı)</span>
+              <span class="badge badge-red">SINKHOLE LOG</span>
+            </div>
+            <pre id="adblockLiveLog" class="code-box" style="max-height:220px; color:#fca5a5;">Henüz engellenen istek kaydı yok — tarayıcıda gezindiğinizde veya "Canlı Test Yap" butonuna bastığınızda burada anlık görünür.</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SEKME 2: CİHAZLARIM (ÖZEL MESH AĞI) -->
+    <section id="tab-devices" class="tab-panel">
+      <div class="card">
+        <div class="card-title">
+          <div>
+            <span>🛡️ Özel Ağdaki Cihazlarım (Zero-Trust Erişim Listesi)</span>
+            <p style="font-size:12px; color:var(--text-muted); font-weight:400; margin-top:3px;">
+              Ağ Anahtarı (Master Key): <code id="masterKeyDisplay" style="color:#fbbf24;">...</code> — Bu anahtara ve sizin onayınıza sahip olmayan hiçbir cihaz ağınızı göremez.
+            </p>
+          </div>
+          <button class="btn btn-green" onclick="openAddDeviceModal()">+ Yeni Cihaz / Telefon Ekle</button>
+        </div>
+
+        <div id="fullDeviceList" class="device-list"></div>
+      </div>
+    </section>
+
+    <!-- SEKME 3: DPI & ENGEL KALKANI -->
+    <section id="tab-dpi" class="tab-panel">
+      <div class="dashboard-grid">
+        <div class="card">
+          <div class="card-title">
+            <span>🕵️ AmneziaWG Kriptografik Paket Gizleme</span>
+            <button class="btn btn-outline" onclick="randomizeDpi()">🎲 İmzayı Yenile</button>
+          </div>
+          <p style="font-size:12px; color:var(--text-muted); margin-bottom:14px; line-height:1.5;">
+            Standart WireGuard paketleri güvenlik duvarları (DPI) tarafından tanınabilir. Aegis, her el sıkışma paketine rastgele şifreli çöp baytlar (Junk Packets) ve özel başlıklar (H1-H4) ekleyerek trafiğinizi normal UDP/HTTPS oyun trafiği gibi gösterir.
+          </p>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <div class="form-group">
+              <label>Junk Paket Sayısı (Jc)</label>
+              <input id="dpiJc" class="input" type="number" />
+            </div>
+            <div class="form-group">
+              <label>MTU (Oyun & Düşük Ping)</label>
+              <input id="dpiMtu" class="input" type="number" />
+            </div>
+            <div class="form-group">
+              <label>Min Junk Boyutu (Jmin Byte)</label>
+              <input id="dpiJmin" class="input" type="number" />
+            </div>
+            <div class="form-group">
+              <label>Max Junk Boyutu (Jmax Byte)</label>
+              <input id="dpiJmax" class="input" type="number" />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>TLS 1.3 SNI Kamuflaj Alan Adı (Güvenlik Duvarı Maskesi)</label>
+            <input id="dpiSni" class="input" type="text" placeholder="www.cloudflare.com" />
+          </div>
+
+          <button class="btn btn-green" style="width:100%; justify-content:center;" onclick="saveDpiSettings()">
+            💾 DPI & Engel Kalkanı Ayarlarını Kaydet
+          </button>
+        </div>
+
+        <div class="card">
+          <div class="card-title">
+            <span>🔐 Aktif Magic Header İmzaları & Bulut Uç Noktası</span>
+            <span class="badge badge-green">DPI Koruması Aktif</span>
+          </div>
+
+          <div class="form-group">
+            <label>7/24 Bulut WebSocket Röle Adresi (Cloudflare Workers WSS)</label>
+            <input id="cloudRelayInput" class="input" type="text" placeholder="wss://aegis-vpn.kullanici.workers.dev" />
+          </div>
+
+          <div class="form-group">
+            <label>WireGuard / AmneziaWG UDP Endpoint (Bulut VPS veya Cloudflare Edge)</label>
+            <input id="serverEndpointInput" class="input" type="text" placeholder="162.159.192.1:2408" />
+          </div>
+
+          <div style="background:#070b13; border:1px solid var(--border); border-radius:12px; padding:14px; margin-bottom:14px; font-family:Consolas,monospace; font-size:12px;">
+            <div style="color:var(--text-muted); margin-bottom:6px;"># Aktif AmneziaWG Magic Headers (DPI Kalkanı):</div>
+            <div id="magicHeadersPreview" style="color:#34d399; line-height:1.6;"></div>
+          </div>
+
+          <button class="btn" style="width:100%; justify-content:center;" onclick="saveDpiSettings()">
+            🔄 Sunucu & Röle Adresini Güncelle
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- SEKME 4: 7/24 ÜCRETSİZ BULUT KURULUMU -->
+    <section id="tab-cloud" class="tab-panel">
+      <div class="dashboard-grid" style="grid-template-columns: 1fr 1fr; margin-bottom:20px;">
+        <!-- VERCEL TEK TIKLA YÜKLEME -->
+        <div class="card" style="border-color: rgba(16, 185, 129, 0.45);">
+          <div class="card-title">
+            <span>▲ Seçenek 1: Vercel'e Tek Tıkla Otomatik Yükle</span>
+            <span class="badge badge-green">EN HIZLI • 5 SANİYE</span>
+          </div>
+          <p style="font-size:13px; color:var(--text-muted); line-height:1.5; margin-bottom:14px;">
+            Bilgisayarınızda Git veya hiçbir program kurulu olmasına gerek yoktur! Sadece ücretsiz Vercel Token'ınızı yapıştırın; Aegis tüm bulut sunucu dosyalarınızı otomatik yükleyip <strong>7/24 çalışan canlı adresinizi</strong> verir:
+          </p>
+          <div class="step-box">
+            <h4>1. Vercel Token Alın (10 Saniye)</h4>
+            <p><a href="https://vercel.com/account/tokens" target="_blank" style="color:#38bdf8; font-weight:700;">vercel.com/account/tokens</a> adresine tıklayıp <strong>"Create"</strong> butonuna basın ve çıkan kodu kopyalayın.</p>
+          </div>
+          <div class="form-group">
+            <label>Vercel Token Yapıştırın</label>
+            <input id="vercelTokenInput" class="input" type="password" placeholder="Vercel Token buraya yapıştırın..." />
+          </div>
+          <button class="btn btn-green" style="width:100%; justify-content:center;" onclick="deployToVercelNow()">
+            🚀 Şimdi Vercel'e Otomatik Yükle & Canlıya Al
+          </button>
+          <div id="vercelDeployResult" style="margin-top:12px; display:none;" class="step-box"></div>
+        </div>
+
+        <!-- GITHUB & GITHUB PAGES TEK TIKLA YÜKLEME -->
+        <div class="card" style="border-color: rgba(59, 130, 246, 0.45);">
+          <div class="card-title">
+            <span>🐙 Seçenek 2: GitHub & GitHub Pages'e Otomatik Yükle</span>
+            <span class="badge badge-blue">OTOMATİK REPO + YAYIN</span>
+          </div>
+          <p style="font-size:13px; color:var(--text-muted); line-height:1.5; margin-bottom:14px;">
+            GitHub Token'ınızı yapıştırın; Aegis otomatik olarak hesabınızda <code>aegis-mesh-vpn</code> deposunu açar, tüm dosyaları yükler ve <strong>GitHub Pages (7/24 Ücretsiz Yayın)</strong> özelliğini aktif eder (Oradan Vercel veya Azure'a da bağlayabilirsiniz):
+          </p>
+          <div class="step-box">
+            <h4>1. GitHub Token Alın (10 Saniye)</h4>
+            <p><a href="https://github.com/settings/tokens/new?scopes=repo&description=AegisMeshVPN" target="_blank" style="color:#38bdf8; font-weight:700;">github.com/settings/tokens/new</a> adresine tıklayın, en alttaki yeşil <strong>"Generate token"</strong> tuşuna basıp kodu kopyalayın.</p>
+          </div>
+          <div class="form-group">
+            <label>GitHub Personal Access Token (ghp_...)</label>
+            <input id="githubTokenInput" class="input" type="password" placeholder="ghp_... ile başlayan GitHub Token yapıştırın" />
+          </div>
+          <button class="btn" style="width:100%; justify-content:center;" onclick="deployToGitHubNow()">
+            🐙 Şimdi GitHub'a Otomatik Yükle & GitHub Pages Aç
+          </button>
+          <div id="githubDeployResult" style="margin-top:12px; display:none;" class="step-box"></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:20px;">
+        <div class="card-title">
+          <span>☁️ Seçenek 3: Cloudflare Workers 7/24 Ücretsiz VPN Rölesi</span>
+          <span class="badge badge-green">%100 ÜCRETSİZ • UYUMAZ</span>
+        </div>
+        <p style="font-size:13px; color:var(--text-muted); margin-bottom:16px; line-height:1.5;">
+          Cloudflare Workers tamamen ücretsizdir, kredi kartı istemez, 7/24 hiç kapanmadan çalışır ve Port 443 (HTTPS/TLS) kullandığı için okul, yurt, iş yeri veya İSS engellerinin <strong>hiçbirine takılmaz</strong>:
+        </p>
+
+        <div class="step-box">
+          <h4>Size Özel Hazırlanan Worker Kodunu Kopyalayıp Cloudflare'de "Deploy" Tuşuna Basın</h4>
+          <div style="margin:10px 0; display:flex; gap:10px;">
+            <button class="btn btn-green" onclick="copyText('workerCodeArea', 'Cloudflare Worker kodu kopyalandı!')">📋 Worker Kodunu Kopyala</button>
+          </div>
+          <pre id="workerCodeArea" class="code-box">Yükleniyor...</pre>
+        </div>
+
+        <div class="step-box">
+          <h4>Size Verilen Worker Adresini Buraya Yapıştırın</h4>
+          <div style="display:flex; gap:10px; margin-top:8px;">
+            <input id="wizardRelayUrl" class="input" type="text" placeholder="wss://aegis-vpn.kullaniciadiniz.workers.dev" />
+            <button class="btn btn-green" onclick="saveWizardRelayUrl()">Kaydet & Bağla</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          <span>🖥️ Seçenek 4: Oracle Cloud / Azure / Google Cloud Free Tier 7/24 Tam UDP Sunucu Betiği</span>
+          <button class="btn btn-outline" onclick="copyText('vpsScriptArea', 'Kurulum betiği kopyalandı!')">📋 Betiği Kopyala</button>
+        </div>
+        <p style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">
+          Azure, Oracle Cloud Always Free veya Google Cloud Free Tier üzerinde ücretsiz bir Ubuntu sunucu açarsanız, bu betiği çalıştırarak Google BBR hızlandırmalı 7/24 WireGuard/AmneziaWG sunucunuzu 60 saniyede kurabilirsiniz:
+        </p>
+        <pre id="vpsScriptArea" class="code-box">Yükleniyor...</pre>
+      </div>
+    </section>
+  </main>
+
+  <!-- MODAL 1: YENİ CİHAZ EKLE -->
+  <div id="addDeviceModal" class="modal-backdrop">
+    <div class="modal" style="max-width:480px;">
+      <div class="card-title">
+        <span>➕ Özel Ağa Yeni Cihaz Ekle</span>
+        <button class="btn btn-outline" onclick="closeModal('addDeviceModal')">✕</button>
+      </div>
+      <div class="form-group">
+        <label>Cihaz Adı (Örn: iPhone 15, Laptop, Ev PC, Tablet)</label>
+        <input id="newDevName" class="input" type="text" placeholder="Örn: Oyun Bilgisayarım / Telefonum" />
+      </div>
+      <div class="form-group">
+        <label>İşletim Sistemi / Cihaz Türü</label>
+        <select id="newDevOs">
+          <option value="Android / iOS (Mobil)">📱 Android / iOS (Mobil)</option>
+          <option value="Windows 10/11 (Masaüstü)">💻 Windows 10/11 (Masaüstü)</option>
+          <option value="macOS (MacBook / iMac)">🍎 macOS (MacBook / iMac)</option>
+          <option value="Linux / Steam Deck">🐧 Linux / Steam Deck</option>
+          <option value="Smart TV / Router">📺 Smart TV / Router</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Varsayılan Bağlantı ve Gizleme Modu</label>
+        <select id="newDevMode">
+          <option value="AmneziaWG Stealth (UDP/443)">🕵️ AmneziaWG Stealth (DPI/Sansür Korumalı + Hızlı)</option>
+          <option value="P2P Doğrudan (UDP)">⚡ Parsec/Tailscale P2P Doğrudan (Ultra Düşük Ping)</option>
+          <option value="WSS Bulut Röle (TLS 443)">☁️ Cloudflare WSS Röle (Port 443 HTTPS)</option>
+        </select>
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:18px;">
+        <button class="btn btn-outline" onclick="closeModal('addDeviceModal')">İptal</button>
+        <button class="btn btn-green" onclick="createNewDevice()">Cihazı Oluştur & Anahtar Üret</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 2: QR KOD VE .CONF İNDİR -->
+  <div id="configModal" class="modal-backdrop">
+    <div class="modal" style="max-width:740px;">
+      <div class="card-title">
+        <span id="configModalTitle">📱 Cihaz Bağlantı Paketi & Gerçek QR Kod</span>
+        <button class="btn btn-outline" onclick="closeModal('configModal')">✕</button>
+      </div>
+
+      <div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
+        <button id="btnStdConf" class="btn btn-green" onclick="switchConfigType('standard')">
+          ⚡ WireGuard Uygulaması QR Kodu (7/24 Bulut)
+        </button>
+        <button id="btnAmneziaConf" class="btn btn-outline" onclick="switchConfigType('amnezia')">
+          🕵️ AmneziaWG Uygulaması QR Kodu
+        </button>
+        <button id="btnMobileUrlQr" class="btn btn-outline" onclick="switchConfigType('mobile')">
+          📸 Normal Kamera / Wi-Fi Kurulum Linki
+        </button>
+      </div>
+
+      <div style="display:grid; grid-template-columns: 230px 1fr; gap:18px; align-items:start;">
+        <div style="text-align:center;">
+          <div id="qrContainer" class="qr-box" style="min-height:200px; min-width:200px;"></div>
+          <p id="qrHelpHint" style="font-size:12px; color:#34d399; font-weight:600; margin-top:8px; line-height:1.4;">
+            Telefonunuzun normal kamerasını açıp bu QR kodu okutun!
+          </p>
+        </div>
+        <div>
+          <pre id="configTextOutput" class="code-box" style="max-height:240px;"></pre>
+          <div style="display:flex; gap:10px; margin-top:12px; flex-wrap:wrap;">
+            <button class="btn btn-green" onclick="downloadActiveConfig()">💾 .conf Dosyasını İndir</button>
+            <button class="btn btn-outline" onclick="copyText('configTextOutput', 'Yapılandırma panoya kopyalandı!')">📋 Kopyala</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast">İşlem başarılı!</div>
+
+  <script src="/qrcode.min.js"></script>
+  <script>
+    let appState = null;
+    let currentModalDeviceConfig = null;
+    let currentConfigMode = 'amnezia';
+
+    async function fetchState() {
+      try {
+        const res = await fetch('/api/state');
+        appState = await res.json();
+        renderState();
+      } catch (e) {
+        console.error('Durum alınamadı:', e);
+      }
+    }
+
+    function renderState() {
+      if (!appState) return;
+
+      document.getElementById('sideNetworkName').textContent = appState.networkName;
+      document.getElementById('masterKeyDisplay').textContent = appState.masterSecretKey;
+      document.getElementById('localProxyLabel').textContent = '127.0.0.1:' + appState.localProxyPort;
+      document.getElementById('publicEpLabel').textContent = appState.detectedPublicIp + ':' + appState.detectedPublicPort;
+      document.getElementById('natTypeLabel').textContent = appState.natType;
+      document.getElementById('mtuBadge').textContent = 'MTU ' + (appState.dpi ? appState.dpi.mtu : 1380);
+
+      const powerBtn = document.getElementById('powerBtn');
+      const powerText = document.getElementById('powerText');
+      const badge = document.getElementById('connStatusBadge');
+
+      if (appState.connected) {
+        powerBtn.classList.add('connected');
+        powerText.textContent = 'BAĞLANDI';
+        badge.className = 'badge badge-green';
+        badge.textContent = '● ŞİFRELİ MESH TÜNELİ AKTİF';
+        document.getElementById('uptimeStat').textContent = 'Başlangıç: ' + (appState.connectedSince || 'Aktif');
+      } else {
+        powerBtn.classList.remove('connected');
+        powerText.textContent = 'BAĞLAN';
+        badge.className = 'badge badge-amber';
+        badge.textContent = '● BAĞLANTIHAZIR (BEKLİYOR)';
+        document.getElementById('uptimeStat').textContent = 'Tünel Hazır';
+      }
+
+      const mainDev = appState.devices && appState.devices.length ? appState.devices[0] : null;
+      if (mainDev) {
+        document.getElementById('virtualIpDisplay').textContent = mainDev.virtualIp;
+        document.getElementById('pingStat').textContent = mainDev.latencyMs + ' ms';
+      }
+
+      document.getElementById('trafficStat').textContent =
+        formatBytes(appState.bytesReceived) + ' ↓ / ' + formatBytes(appState.bytesSent) + ' ↑';
+
+      if (appState.adblock) {
+        const totalBlk = (appState.adblock.blockedAdsCount || 0) + (appState.adblock.blockedTrackersCount || 0);
+        document.getElementById('deviceCountStat').textContent = totalBlk + ' Engellendi';
+        const dashSub = document.getElementById('adblockDashSub');
+        if (dashSub) {
+          dashSub.textContent = appState.adblock.enabled
+            ? '🚫 Reklam & İzleyici Kalkanı Aktif (' + formatBytes(appState.adblock.savedBytes || 0) + ' Tasarruf)'
+            : '⚠️ Reklam Kalkanı Devre Dışı';
+        }
+        renderAdBlockState(appState.adblock);
+      }
+
+      // Render device lists
+      renderDevices('dashboardDeviceList', true);
+      renderDevices('fullDeviceList', false);
+
+      // Render DPI inputs if not focused
+      if (appState.dpi && document.activeElement.tagName !== 'INPUT') {
+        document.getElementById('dpiJc').value = appState.dpi.jc;
+        document.getElementById('dpiMtu').value = appState.dpi.mtu;
+        document.getElementById('dpiJmin').value = appState.dpi.jmin;
+        document.getElementById('dpiJmax').value = appState.dpi.jmax;
+        document.getElementById('dpiSni').value = appState.dpi.sniHost;
+        document.getElementById('cloudRelayInput').value = appState.cloudRelayUrl;
+        document.getElementById('wizardRelayUrl').value = appState.cloudRelayUrl;
+        document.getElementById('serverEndpointInput').value = appState.serverEndpoint;
+
+        document.getElementById('magicHeadersPreview').innerHTML =
+          `Jc = ${appState.dpi.jc} | Jmin = ${appState.dpi.jmin} | Jmax = ${appState.dpi.jmax}<br/>` +
+          `S1 = ${appState.dpi.s1} | S2 = ${appState.dpi.s2}<br/>` +
+          `H1 = ${appState.dpi.h1} | H2 = ${appState.dpi.h2}<br/>` +
+          `H3 = ${appState.dpi.h3} | H4 = ${appState.dpi.h4}`;
+      }
+    }
+
+    function renderDevices(containerId, compact) {
+      const container = document.getElementById(containerId);
+      if (!container || !appState || !appState.devices) return;
+
+      container.innerHTML = appState.devices.map(dev => {
+        const statusBadge = dev.authorized
+          ? `<span class="badge badge-green">● ${dev.latencyMs} ms • ${dev.connectionMode}</span>`
+          : `<span class="badge badge-red">✕ Engellendi (Yetkisiz)</span>`;
+
+        return `
+          <div class="device-item">
+            <div class="device-info">
+              <div class="device-icon">${dev.os.includes('Mobil') || dev.os.includes('Android') ? '📱' : '💻'}</div>
+              <div class="device-meta">
+                <h4>
+                  ${escapeHtml(dev.name)}
+                  ${dev.isCurrentDevice ? '<span class="badge badge-blue">Bu Cihaz</span>' : ''}
+                </h4>
+                <p>Sanal IP: <strong>${dev.virtualIp}</strong> | ${escapeHtml(dev.os)} | PublicKey: ${dev.publicKey.substring(0, 14)}...</p>
+              </div>
+            </div>
+            <div class="device-actions">
+              ${statusBadge}
+              <button class="btn btn-outline" onclick="openConfigModal('${dev.id}')">📱 QR Kod & .conf</button>
+              ${!dev.isCurrentDevice ? `
+                <button class="btn btn-outline" onclick="toggleDeviceAuth('${dev.id}')">
+                  ${dev.authorized ? '⏸️ Durdur' : '✅ Yetkilendir'}
+                </button>
+                ${!compact ? `<button class="btn btn-danger" onclick="deleteDevice('${dev.id}')">🗑️</button>` : ''}
+              ` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function toggleConnection() {
+      const protocol = document.getElementById('protocolSelect').value;
+      const res = await fetch('/api/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ connect: !appState.connected, protocol })
+      });
+      appState = await res.json();
+      renderState();
+      showToast(appState.connected ? '🚀 Aegis Özel Mesh VPN Bağlantısı Kuruldu!' : 'Bağlantı güvenli şekilde kapatıldı.');
+    }
+
+    async function changeProtocol() {
+      if (appState && appState.connected) {
+        const protocol = document.getElementById('protocolSelect').value;
+        const res = await fetch('/api/connect', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ connect: true, protocol })
+        });
+        appState = await res.json();
+        renderState();
+        showToast('Tünel protokolü güncellendi: ' + protocol);
+      }
+    }
+
+    function openAddDeviceModal() {
+      document.getElementById('newDevName').value = '';
+      document.getElementById('addDeviceModal').classList.add('open');
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('open');
+    }
+
+    async function createNewDevice() {
+      const name = document.getElementById('newDevName').value.trim() || 'Yeni Cihazım';
+      const os = document.getElementById('newDevOs').value;
+      const connectionMode = document.getElementById('newDevMode').value;
+
+      const res = await fetch('/api/devices/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, os, connectionMode })
+      });
+      const data = await res.json();
+      appState = data.state;
+      closeModal('addDeviceModal');
+      renderState();
+      showToast('✅ ' + name + ' (' + data.device.virtualIp + ') özel ağınıza eklendi!');
+      openConfigModal(data.device.id);
+    }
+
+    async function toggleDeviceAuth(id) {
+      const res = await fetch('/api/devices/toggle-auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
+      appState = await res.json();
+      renderState();
+      showToast('Cihaz erişim yetkisi güncellendi.');
+    }
+
+    async function deleteDevice(id) {
+      const res = await fetch('/api/devices/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
+      appState = await res.json();
+      renderState();
+      showToast('Cihaz özel ağdan kaldırıldı.');
+    }
+
+    async function openConfigModal(deviceId) {
+      const res = await fetch('/api/devices/config?id=' + encodeURIComponent(deviceId));
+      currentModalDeviceConfig = await res.json();
+      document.getElementById('configModalTitle').textContent =
+        '📱 ' + currentModalDeviceConfig.device.name + ' (' + currentModalDeviceConfig.device.virtualIp + ') Bağlantı Paketi';
+      switchConfigType('standard');
+      document.getElementById('configModal').classList.add('open');
+    }
+
+    function switchConfigType(type) {
+      currentConfigMode = type;
+      const btnMobile = document.getElementById('btnMobileUrlQr');
+      const btnAmnezia = document.getElementById('btnAmneziaConf');
+      const btnStd = document.getElementById('btnStdConf');
+      const hint = document.getElementById('qrHelpHint');
+
+      btnMobile.className = 'btn btn-outline';
+      btnAmnezia.className = 'btn btn-outline';
+      btnStd.className = 'btn btn-outline';
+
+      if (type === 'mobile') {
+        btnMobile.className = 'btn btn-green';
+        const url = currentModalDeviceConfig.mobilePortalUrl;
+        hint.textContent = '📸 Telefonunuzun NORMAL KAMERASINI açıp bu QR kodu okutun (Aynı Wi-Fi ağında olmalısınız)';
+        document.getElementById('configTextOutput').textContent =
+          '📱 TELEFON KAMERASIYLA BAĞLANTI ADRESİ:\n' +
+          url + '\n\n' +
+          '--- VEYA WI-FI PROXY AYARI (UYGULAMASIZ ANINDA ENGELSİZ) ---\n' +
+          'Otomatik Proxy URL : http://' + currentModalDeviceConfig.lanIp + ':' + currentModalDeviceConfig.proxyPort + '/proxy.pac\n' +
+          'Manuel Proxy IP    : ' + currentModalDeviceConfig.lanIp + '\n' +
+          'Manuel Proxy Port  : ' + currentModalDeviceConfig.proxyPort + '\n\n' +
+          '--- STANDART WIREGUARD CONFIG ---\n' +
+          currentModalDeviceConfig.standardConfig;
+        renderRealQrCode(url);
+      } else if (type === 'amnezia') {
+        btnAmnezia.className = 'btn btn-green';
+        hint.textContent = '🕵️ AmneziaVPN / AmneziaWG mobil uygulamasından "+ -> QR Kodu Tara" ile okutun.';
+        document.getElementById('configTextOutput').textContent = currentModalDeviceConfig.amneziaConfig;
+        renderRealQrCode(currentModalDeviceConfig.amneziaConfig);
+      } else {
+        btnStd.className = 'btn btn-green';
+        hint.textContent = '⚡ Resmi WireGuard mobil uygulamasından "+ -> QR Koddan Oluştur" ile okutun.';
+        document.getElementById('configTextOutput').textContent = currentModalDeviceConfig.standardConfig;
+        renderRealQrCode(currentModalDeviceConfig.standardConfig);
+      }
+    }
+
+    function downloadActiveConfig() {
+      if (!currentModalDeviceConfig) return;
+      const text = currentConfigMode === 'amnezia'
+        ? currentModalDeviceConfig.amneziaConfig
+        : currentModalDeviceConfig.standardConfig;
+      const safeName = currentModalDeviceConfig.device.name.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const suffix = currentConfigMode === 'amnezia' ? '_AmneziaWG.conf' : '_WireGuard.conf';
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'Aegis_' + safeName + suffix;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('📥 Yapılandırma dosyası indirildi!');
+    }
+
+    async function randomizeDpi() {
+      const res = await fetch('/api/dpi/randomize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      appState = await res.json();
+      renderState();
+      showToast('🎲 Yeni kriptografik AmneziaWG DPI başlıkları üretildi!');
+    }
+
+    async function saveDpiSettings() {
+      const payload = {
+        jc: parseInt(document.getElementById('dpiJc').value || '6', 10),
+        mtu: parseInt(document.getElementById('dpiMtu').value || '1380', 10),
+        jmin: parseInt(document.getElementById('dpiJmin').value || '50', 10),
+        jmax: parseInt(document.getElementById('dpiJmax').value || '600', 10),
+        sniHost: document.getElementById('dpiSni').value.trim(),
+        cloudRelayUrl: document.getElementById('cloudRelayInput').value.trim(),
+        serverEndpoint: document.getElementById('serverEndpointInput').value.trim()
+      };
+      const res = await fetch('/api/dpi/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      appState = await res.json();
+      renderState();
+      showToast('✅ DPI Kalkanı ve Bulut Röle ayarları kaydedildi!');
+    }
+
+    async function saveWizardRelayUrl() {
+      const relay = document.getElementById('wizardRelayUrl').value.trim();
+      if (!relay) return;
+      document.getElementById('cloudRelayInput').value = relay;
+      await saveDpiSettings();
+    }
+
+    async function runDiagnostics() {
+      showToast('🔍 STUN NAT delme ve Cloudflare 443 gecikme testi yapılıyor...');
+      const res = await fetch('/api/diagnostics', { method: 'POST' });
+      const data = await res.json();
+      appState = data.state;
+      renderState();
+      showToast(`⚡ Test Başarılı! Cloudflare: ${data.cloudflare443Ms}ms | Dış IP: ${data.publicIp}:${data.publicPort}`);
+    }
+
+    async function shutdownApp() {
+      try {
+        showToast('🛑 VPN kapatılıyor ve normal internet ayarlarınız sıfırlanıyor...');
+        await fetch('/api/shutdown', { method: 'POST' });
+        setTimeout(() => { window.close(); }, 600);
+      } catch (e) {
+        window.close();
+      }
+    }
+
+    async function loadCloudTemplates() {
+      try {
+        const res = await fetch('/api/cloud-files');
+        const data = await res.json();
+        document.getElementById('workerCodeArea').textContent = data.workerCode;
+        document.getElementById('vpsScriptArea').textContent = data.vpsScript;
+      } catch (e) {}
+    }
+
+    async function deployToVercelNow() {
+      const token = document.getElementById('vercelTokenInput').value.trim();
+      if (!token) {
+        showToast('Lütfen Vercel Token girin!');
+        return;
+      }
+      showToast('🚀 Vercel bulutuna yükleniyor, lütfen bekleyin...');
+      try {
+        const res = await fetch('/api/cloud/deploy-vercel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token })
+        });
+        const data = await res.json();
+        const box = document.getElementById('vercelDeployResult');
+        box.style.display = 'block';
+        if (data.ok) {
+          box.innerHTML = `<h4>✅ Vercel'e Başarıyla Yüklendi (7/24 Aktif)!</h4><p>Canlı Adresiniz: <a href="${data.url}" target="_blank" style="color:#34d399;font-weight:700;">${data.url}</a></p>`;
+          showToast('🎉 Vercel bulut yüklemesi tamamlandı!');
+        } else {
+          box.innerHTML = `<h4 style="color:#f87171;">❌ Hata:</h4><p>${escapeHtml(data.error || 'Token geçersiz')}</p>`;
+        }
+      } catch (e) {
+        showToast('Yükleme sırasında hata oluştu.');
+      }
+    }
+
+    async function deployToGitHubNow() {
+      const token = document.getElementById('githubTokenInput').value.trim();
+      if (!token) {
+        showToast('Lütfen GitHub Token girin!');
+        return;
+      }
+      showToast('🐙 GitHub deponuz oluşturuluyor ve dosyalar yükleniyor...');
+      try {
+        const res = await fetch('/api/cloud/deploy-github', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token })
+        });
+        const data = await res.json();
+        const box = document.getElementById('githubDeployResult');
+        box.style.display = 'block';
+        if (data.ok) {
+          box.innerHTML =
+            `<h4>✅ GitHub & GitHub Pages Yayına Alındı!</h4>` +
+            `<p>GitHub Deponuz: <a href="${data.repoUrl}" target="_blank" style="color:#60a5fa;font-weight:700;">${data.repoUrl}</a><br/>` +
+            `7/24 Canlı Web Adresiniz (1 dk içinde aktif olur): <a href="${data.pagesUrl}" target="_blank" style="color:#34d399;font-weight:700;">${data.pagesUrl}</a></p>`;
+          showToast('🎉 GitHub deponuz oluşturuldu ve yüklendi!');
+        } else {
+          box.innerHTML = `<h4 style="color:#f87171;">❌ Hata:</h4><p>${escapeHtml(data.error || 'Token geçersiz')}</p>`;
+        }
+      } catch (e) {
+        showToast('GitHub yüklemesi sırasında hata oluştu.');
+      }
+    }
+
+    function switchTab(tabName, btnEl) {
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('tab-' + tabName).classList.add('active');
+      if (btnEl) btnEl.classList.add('active');
+    }
+
+    function copyText(elementId, msg) {
+      const text = document.getElementById(elementId).textContent;
+      navigator.clipboard.writeText(text);
+      showToast(msg || 'Kopyalandı!');
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.style.display = 'block';
+      clearTimeout(window._toastTimer);
+      window._toastTimer = setTimeout(() => { t.style.display = 'none'; }, 3500);
+    }
+
+    function formatBytes(bytes) {
+      if (!bytes || bytes < 1024) return (bytes || 0) + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+    }
+
+    function escapeHtml(str) {
+      return String(str || '').replace(/[&<>"']/g, s => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[s]));
+    }
+
+    // Real ISO/IEC 18004 Reed-Solomon QR Code Encoder (via qrcode-generator)
+    function renderRealQrCode(payload) {
+      const container = document.getElementById('qrContainer');
+      if (typeof qrcode === 'function') {
+        try {
+          const qr = qrcode(0, 'M');
+          qr.addData(payload);
+          qr.make();
+          container.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+          const svgEl = container.querySelector('svg');
+          if (svgEl) {
+            svgEl.setAttribute('width', '196');
+            svgEl.setAttribute('height', '196');
+          }
+          return;
+        } catch (err) {
+          console.error('QR generation error:', err);
+        }
+      }
+      container.innerHTML = '<div style="color:#000;padding:12px;">QR Kütüphanesi Yükleniyor...</div>';
+    }
+
+    async function startTurboDownload() {
+      const url = document.getElementById('turboUrlInput').value.trim();
+      const fileName = document.getElementById('turboFileNameInput').value.trim();
+      const chunkMb = parseInt(document.getElementById('turboChunkSize').value || '8', 10);
+      const threads = parseInt(document.getElementById('turboThreads').value || '8', 10);
+
+      if (!url) {
+        showToast('Lütfen indirme bağlantısını (URL) yapıştırın!');
+        return;
+      }
+
+      const res = await fetch('/api/turbo/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, fileName, chunkMb, threads })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        showToast('🚀 8-Kanallı Otomatik Durdur-Başlat Turbo İndirme Başlatıldı!');
+        pollTurboStatus();
+      } else {
+        showToast('Hata: ' + (data.error || 'Başlatılamadı'));
+      }
+    }
+
+    async function cancelTurboDownload() {
+      await fetch('/api/turbo/cancel', { method: 'POST' });
+      showToast('⏹️ İndirme durduruldu.');
+      pollTurboStatus();
+    }
+
+    async function openDownloadsFolder() {
+      await fetch('/api/turbo/open-folder', { method: 'POST' });
+    }
+
+    async function pollTurboStatus() {
+      try {
+        const res = await fetch('/api/turbo/status');
+        const st = await res.json();
+        document.getElementById('turboStateLabel').textContent = st.stateText || 'Hazır';
+        document.getElementById('turboSpeedBadge').textContent = (st.speedMBps || 0).toFixed(2) + ' MB/s';
+        document.getElementById('turboProgressBar').style.width = (st.percent || 0) + '%';
+        document.getElementById('turboBytesLabel').textContent =
+          formatBytes(st.downloadedBytes) + ' / ' + formatBytes(st.totalBytes) + ' (%' + (st.percent || 0) + ')';
+        document.getElementById('turboChunksLabel').textContent =
+          'Tamamlanan Burst Parçası: ' + (st.completedChunks || 0) + ' / ' + (st.totalChunks || 0);
+      } catch (e) {}
+    }
+
+    function renderAdBlockState(ab) {
+      if (!ab) return;
+      document.getElementById('abAdsCount').textContent = ab.blockedAdsCount || 0;
+      document.getElementById('abTrackersCount').textContent = ab.blockedTrackersCount || 0;
+      document.getElementById('abSavedBytes').textContent = formatBytes(ab.savedBytes || 0);
+
+      const stText = document.getElementById('abStatusText');
+      const badge = document.getElementById('abBadge');
+      if (ab.enabled) {
+        stText.textContent = ab.aggressiveMode ? 'AGRESİF AKTİF' : 'STANDART AKTİF';
+        stText.style.color = '#10b981';
+        badge.className = 'badge badge-green';
+        badge.textContent = 'OTOMATİK ENGELLEYİCİ AKTİF';
+      } else {
+        stText.textContent = 'KAPALI';
+        stText.style.color = '#f87171';
+        badge.className = 'badge badge-red';
+        badge.textContent = 'DEVRE DIŞI';
+      }
+
+      document.getElementById('abEnabledToggle').checked = !!ab.enabled;
+      document.getElementById('abAggressiveToggle').checked = !!ab.aggressiveMode;
+      document.getElementById('abPopupToggle').checked = !!ab.blockPopupsAndBetting;
+      document.getElementById('abTrackerToggle').checked = !!ab.blockTrackers;
+      document.getElementById('abMobileDnsToggle').checked = !!ab.adGuardDnsForMobile;
+
+      const pillsEl = document.getElementById('customBlockedPills');
+      if (pillsEl) {
+        pillsEl.innerHTML = (ab.customBlockedDomains || []).map(d =>
+          `<span class="badge badge-red" style="display:inline-flex;align-items:center;gap:6px;padding:6px 10px;">
+            🚫 ${escapeHtml(d)}
+            <span style="cursor:pointer;font-weight:900;" onclick="removeCustomAdBlockDomain('${escapeHtml(d)}')">✕</span>
+          </span>`
+        ).join('');
+      }
+
+      const logEl = document.getElementById('adblockLiveLog');
+      if (logEl && ab.recentBlockedLog && ab.recentBlockedLog.length > 0) {
+        logEl.textContent = ab.recentBlockedLog.join('\n');
+      }
+    }
+
+    async function saveAdBlockSettings() {
+      const payload = {
+        enabled: document.getElementById('abEnabledToggle').checked,
+        aggressiveMode: document.getElementById('abAggressiveToggle').checked,
+        blockPopupsAndBetting: document.getElementById('abPopupToggle').checked,
+        blockTrackers: document.getElementById('abTrackerToggle').checked,
+        adGuardDnsForMobile: document.getElementById('abMobileDnsToggle').checked
+      };
+      const res = await fetch('/api/adblock/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      appState = await res.json();
+      renderState();
+      showToast('🚫 Agresif Reklam & İzleyici Kalkanı ayarları güncellendi!');
+    }
+
+    async function addCustomAdBlockDomain(listType) {
+      const inp = document.getElementById('customBlockDomainInput');
+      const domain = inp.value.trim();
+      if (!domain) return;
+      const res = await fetch('/api/adblock/add-domain', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ domain, listType: listType || 'block' })
+      });
+      inp.value = '';
+      appState = await res.json();
+      renderState();
+      showToast('🚫 ' + domain + ' kara listeye eklendi ve anında bloklandı!');
+    }
+
+    async function removeCustomAdBlockDomain(domain) {
+      const res = await fetch('/api/adblock/remove-domain', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ domain, listType: 'block' })
+      });
+      appState = await res.json();
+      renderState();
+      showToast('Alan adı kara listeden çıkarıldı.');
+    }
+
+    async function testAdBlockerNow() {
+      const res = await fetch('/api/adblock/test', { method: 'POST' });
+      const data = await res.json();
+      appState = data.state;
+      renderState();
+      showToast(`🛡️ Test Başarılı: ${data.blocked}/${data.tested} Reklam & İzleyici Sunucusu 0.1ms'de Engellendi!`);
+    }
+
+    async function clearAdBlockStats() {
+      const res = await fetch('/api/adblock/clear-stats', { method: 'POST' });
+      appState = await res.json();
+      document.getElementById('adblockLiveLog').textContent = 'Sayaçlar ve günlük temizlendi.';
+      renderState();
+      showToast('🧹 Reklam engelleyici sayaçları sıfırlandı.');
+    }
+
+    fetchState();
+    loadCloudTemplates();
+    setInterval(fetchState, 2500);
+    setInterval(pollTurboStatus, 1000);
+  </script>
+</body>
+</html>
