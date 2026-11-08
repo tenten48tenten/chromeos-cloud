@@ -1,62 +1,154 @@
-name: ChromeOS Web Cloud Desktop
+name: ChromeOS-Cloud (XFCE + Brave + VNC + CRD)
 
 on:
   workflow_dispatch:
+    inputs:
+      crd_code:
+        description: 'Opsiyonel: Google Remote Desktop (remotedesktop.google.com/headless) Debian Linux komutu'
+        required: false
+        default: ''
+      pin:
+        description: 'Google Remote Desktop PIN (6 haneli)'
+        required: false
+        default: '123456'
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
-  desktop:
-    runs-on: ubuntu-latest
+  cloud-desktop:
+    runs-on: ubuntu-22.04
     timeout-minutes: 360
-
     steps:
-      - name: Depoyu Indir
-        uses: actions/checkout@v3
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-      - name: Cloudflared Kur
+      - name: Kullanici (kali:kali) ve Root (root:kali) Ayarla
         run: |
-          curl -L --output cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
-          sudo dpkg -i cloudflared.deb
+          sudo useradd -m -s /bin/bash -G sudo kali 2>/dev/null || true
+          echo -e "kali:kali\nroot:kali\nrunner:kali" | sudo chpasswd
+          echo "kali ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/kali
 
-      - name: Docker Chromium Web Desktop Baslat
+      - name: XFCE4, TigerVNC, noVNC ve Brave Browser Kurulumu
         run: |
-          docker run -d --name=chrome -p 3000:3000 --shm-size="2gb" -e PUID=1000 -e PGID=1000 lscr.io/linuxserver/chromium:latest
-          sleep 8
+          export DEBIAN_FRONTEND=noninteractive
+          sudo rm -f /var/lib/man-db/auto-update
+          curl -fsSL https://dl.brave.com/install.sh | sh
+          sudo apt-get install -y --no-install-recommends \
+            xfce4 xfce4-terminal thunar dbus-x11 x11-xserver-utils \
+            tigervnc-standalone-server tigervnc-common novnc websockify \
+            fonts-liberation fonts-dejavu-core pulseaudio ca-certificates
 
-          cloudflared tunnel --url http://localhost:3000 --logfile /tmp/tunnel.log &
-          
-          LINK=""
-          for i in {1..35}; do
-            LINK=$(grep -o 'https://[-a-z0-9]*\.trycloudflare\.com' /tmp/tunnel.log | head -n 1 || true)
-            if [ -n "$LINK" ]; then
-              break
-            fi
-            sleep 1
-          done
+          # Brave Browser root/kali sandbox hatasi olmadan acilsin
+          sudo sed -i 's|Exec=/usr/bin/brave-browser-stable|Exec=/usr/bin/brave-browser-stable --no-sandbox --test-type --password-store=basic|g' /usr/share/applications/brave-browser.desktop || true
+          sudo -u kali mkdir -p /home/kali/Desktop
+          sudo cp /usr/share/applications/brave-browser.desktop /home/kali/Desktop/ || true
+          sudo chmod +x /home/kali/Desktop/brave-browser.desktop || true
+          sudo chown -R kali:kali /home/kali/Desktop
 
-          echo "LINK: $LINK"
+      - name: TigerVNC + noVNC + Cloudflare Tunnel Baslat (kali:kali)
+        run: |
+          sudo -u kali mkdir -p /home/kali/.vnc
+          printf "kali\nkali\nn\n" | sudo -u kali vncpasswd
+          cat << 'EOF' | sudo -u kali tee /home/kali/.vnc/xstartup
+          #!/bin/bash
+          unset SESSION_MANAGER
+          unset DBUS_SESSION_BUS_ADDRESS
+          export XKL_XMODMAP_DISABLE=1
+          exec dbus-launch --exit-with-session startxfce4
+          EOF
+          sudo chmod +x /home/kali/.vnc/xstartup
 
-          git config --global user.name "Cloud Bot"
-          git config --global user.email "bot@cloud.local"
-          cat <<EOF > README.md
-          # 🚀 Canlı ChromeOS Web Masaüstünüz Hazır!
+          sudo -u kali tigervncserver :1 -geometry 1920x1080 -depth 24 -localhost no -xstartup /home/kali/.vnc/xstartup
 
-          Doğrudan tarayıcınızda kullanmak için aşağıdaki bağlantıya tıklayın:
-
-          ## 👉 [CANLI MASAÜSTÜNÜ AÇMAK İÇİN BURAYA TIKLAYIN]($LINK)
-
-          * **Sistem:** Google Chromium / ChromeOS Cloud Desktop
-          * **Giriş:** Şifresiz / Tek Tıkla Bağlantı
-          * **Süre:** 6 Saat Kesintisiz
+          # noVNC otomatik giris sayfasi
+          cat << 'EOF' | sudo tee /usr/share/novnc/index.html
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta http-equiv="refresh" content="0; url=vnc.html?autoconnect=true&resize=scale&reconnect=true">
+          </head>
+          <body>Baglaniyor... (Sifre: kali)</body>
+          </html>
           EOF
 
-          git add README.md
-          git commit -m "Live link: $LINK"
-          git push
+          websockify -D --web=/usr/share/novnc/ 6080 localhost:5901
 
-      - name: Oturumu Acik Tut (6 Saat)
+          curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o cloudflared
+          chmod +x cloudflared
+          nohup ./cloudflared tunnel --no-autoupdate --url http://localhost:6080 > cf.log 2>&1 &
+
+          for i in {1..30}; do
+            URL=$(grep -oP 'https://[a-zA-Z0-9-]+\.trycloudflare\.com' cf.log | head -n 1 || true)
+            if [ -n "$URL" ]; then
+              break
+            fi
+            sleep 2
+          done
+
+          echo "CLOUDFLARE_URL=$URL"
+          cat << EOF > README.md
+          # ChromeOS-Cloud Aktif Masaustu
+
+          - **Canli Web VNC Linki:** [$URL]($URL)
+          - **Kullanici Adi:** \`kali\`
+          - **VNC / Sistem / Root Sifresi:** \`kali\`
+          - **Tarayici:** Brave Browser (Masaustunde hazir)
+          - **Son Baslatma (UTC):** $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          EOF
+
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add README.md
+          git commit -m "Update live ChromeOS-Cloud URL" || true
+          git push origin main || true
+
+      - name: Google Chrome Remote Desktop (ChromeOS-Cloud) Baslat (Kalici/Persistent)
+        env:
+          CRD_CMD: ${{ github.event.inputs.crd_code }}
+          PIN: ${{ github.event.inputs.pin }}
         run: |
-          echo "Masaustu hazir ve calisiyor!"
-          sleep 21600
+          if [ -n "$CRD_CMD" ] || [ -f ".crd_host.json.b64" ]; then
+            export DEBIAN_FRONTEND=noninteractive
+            curl -fsSL https://dl.google.com/linux/direct/chrome-remote-desktop_current_amd64.deb -o crd.deb
+            sudo apt-get install -y --no-install-recommends ./crd.deb
+            sudo groupadd -f chrome-remote-desktop
+            sudo usermod -aG chrome-remote-desktop kali
+            echo "exec /etc/X11/Xsession /usr/bin/xfce4-session" | sudo -u kali tee /home/kali/.chrome-remote-desktop-session
+            sudo bash -c 'echo "exec /etc/X11/Xsession /usr/bin/xfce4-session" > /etc/chrome-remote-desktop-session'
+            sudo -u kali mkdir -p /home/kali/.config/chrome-remote-desktop
+            sudo chmod 700 /home/kali/.config/chrome-remote-desktop
+
+            HOST_HASH=$(python3 -c 'import socket,hashlib; print(hashlib.md5(socket.gethostname().encode()).hexdigest())')
+
+            if [ -n "$CRD_CMD" ]; then
+              CODE=$(echo "$CRD_CMD" | grep -oP '(?<=--code=")[^"]+' || echo "$CRD_CMD")
+              sudo -u kali DISPLAY= /opt/google/chrome-remote-desktop/start-host \
+                --code="$CODE" \
+                --redirect-url="https://remotedesktop.google.com/_/oauthredirect" \
+                --name="ChromeOS-Cloud" --pin="${PIN:-123456}"
+              # Kaydedilen host.json dosyasini sonraki 6 saatlik oturumlar icin sakla
+              HOST_FILE=$(sudo ls /home/kali/.config/chrome-remote-desktop/host#*.json | head -n 1 || true)
+              if [ -n "$HOST_FILE" ]; then
+                sudo base64 -w 0 "$HOST_FILE" > .crd_host.json.b64
+                git pull --rebase origin main || true
+                git add .crd_host.json.b64
+                git commit -m "Save persistent ChromeOS-Cloud CRD host token" || true
+                git push origin main || true
+              fi
+            elif [ -f ".crd_host.json.b64" ]; then
+              base64 -d .crd_host.json.b64 | sudo -u kali tee "/home/kali/.config/chrome-remote-desktop/host#${HOST_HASH}.json" > /dev/null
+              sudo chmod 600 "/home/kali/.config/chrome-remote-desktop/host#${HOST_HASH}.json"
+              sudo systemctl start chrome-remote-desktop@kali || sudo -u kali /opt/google/chrome-remote-desktop/chrome-remote-desktop --start || true
+            fi
+          fi
+
+      - name: 6 Saat Acik Tut ve Otomatik Yeniden Baslat
+        run: |
+          sleep 20500
+          curl -s -X POST \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/chromeos.yml/dispatches" \
+            -d '{"ref":"main"}' || true
