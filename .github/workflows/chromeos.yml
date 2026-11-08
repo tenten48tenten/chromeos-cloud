@@ -34,7 +34,7 @@ jobs:
         run: |
           export DEBIAN_FRONTEND=noninteractive
           sudo rm -f /var/lib/man-db/auto-update
-          curl -fsSL --retry 5 --retry-all-errors https://dl.brave.com/install.sh | sh
+          curl -fsSL --retry 5 --retry-all-errors https://dl.brave.com/install.sh | sh || true
           sudo apt-get install -y --no-install-recommends \
             xfce4 xfce4-terminal thunar dbus-x11 x11-xserver-utils \
             tigervnc-standalone-server tigervnc-common novnc websockify \
@@ -54,41 +54,43 @@ jobs:
           CRD_CMD: ${{ github.event.inputs.crd_code }}
           PIN: ${{ github.event.inputs.pin }}
         run: |
-          if [ -n "$CRD_CMD" ] || [ -f ".crd_host.json.b64" ]; then
-            export DEBIAN_FRONTEND=noninteractive
-            curl -fsSL --retry 5 --retry-all-errors https://dl.google.com/linux/direct/chrome-remote-desktop_current_amd64.deb -o crd.deb
-            sudo apt-get install -y ./crd.deb
-            sudo groupadd -f chrome-remote-desktop
-            sudo usermod -aG chrome-remote-desktop $USER
-            sudo usermod -aG chrome-remote-desktop kali
-            echo "exec /etc/X11/Xsession /usr/bin/xfce4-session" > ~/.chrome-remote-desktop-session
-            sudo bash -c 'echo "exec /etc/X11/Xsession /usr/bin/xfce4-session" > /etc/chrome-remote-desktop-session'
-            mkdir -p ~/.config/chrome-remote-desktop
-            chmod 700 ~/.config/chrome-remote-desktop
+          export DEBIAN_FRONTEND=noninteractive
+          curl -fsSL --retry 5 --retry-all-errors https://dl.google.com/linux/direct/chrome-remote-desktop_current_amd64.deb -o crd.deb
+          sudo apt-get install -y ./crd.deb
+          sudo groupadd -f chrome-remote-desktop
+          sudo usermod -aG chrome-remote-desktop $USER
+          sudo usermod -aG chrome-remote-desktop kali
+          echo "exec /etc/X11/Xsession /usr/bin/xfce4-session" > ~/.chrome-remote-desktop-session
+          sudo bash -c 'echo "exec /etc/X11/Xsession /usr/bin/xfce4-session" > /etc/chrome-remote-desktop-session'
+          mkdir -p ~/.config/chrome-remote-desktop
+          chmod 700 ~/.config/chrome-remote-desktop
 
-            HOST_HASH=$(python3 -c 'import socket,hashlib; print(hashlib.md5(socket.gethostname().encode()).hexdigest())')
+          HOST_HASH=$(python3 -c 'import socket,hashlib; print(hashlib.md5(socket.gethostname().encode()).hexdigest())')
+          FQDN_HASH=$(python3 -c 'import socket,hashlib; print(hashlib.md5(socket.getfqdn().encode()).hexdigest())')
 
-            if [ -n "$CRD_CMD" ]; then
-              CODE=$(echo "$CRD_CMD" | grep -oP '(?<=--code=")[^"]+' || echo "$CRD_CMD")
-              DISPLAY= /opt/google/chrome-remote-desktop/start-host \
-                --code="$CODE" \
-                --redirect-url="https://remotedesktop.google.com/_/oauthredirect" \
-                --name="ChromeOS-Cloud" --pin="${PIN:-123456}" || true
-              HOST_FILE=$(ls ~/.config/chrome-remote-desktop/host#*.json 2>/dev/null | head -n 1 || true)
-              if [ -n "$HOST_FILE" ]; then
-                base64 -w 0 "$HOST_FILE" > .crd_host.json.b64
-                git config user.name "github-actions"
-                git config user.email "github-actions@github.com"
-                git pull --rebase origin main || true
-                git add .crd_host.json.b64
-                git commit -m "Save persistent ChromeOS-Cloud CRD host token" || true
-                git push origin main || true
-              fi
-            elif [ -f ".crd_host.json.b64" ]; then
-              base64 -d .crd_host.json.b64 > ~/.config/chrome-remote-desktop/host#${HOST_HASH}.json
-              chmod 600 ~/.config/chrome-remote-desktop/host#${HOST_HASH}.json
-              sudo systemctl start chrome-remote-desktop@$USER || /opt/google/chrome-remote-desktop/chrome-remote-desktop --start || true
+          if [ -n "$CRD_CMD" ]; then
+            CODE=$(echo "$CRD_CMD" | grep -oP '(?<=--code=")[^"]+' || echo "$CRD_CMD")
+            DISPLAY= /opt/google/chrome-remote-desktop/start-host \
+              --code="$CODE" \
+              --redirect-url="https://remotedesktop.google.com/_/oauthredirect" \
+              --name="ChromeOS-Cloud" --pin="${PIN:-123456}" || true
+            HOST_FILE=$(ls ~/.config/chrome-remote-desktop/host#*.json 2>/dev/null | head -n 1 || true)
+            if [ -n "$HOST_FILE" ]; then
+              base64 -w 0 "$HOST_FILE" > .crd_host.json.b64
+              git config user.name "github-actions"
+              git config user.email "github-actions@github.com"
+              git pull --rebase origin main || true
+              git add .crd_host.json.b64
+              git commit -m "Save persistent ChromeOS-Cloud CRD host token" || true
+              git push origin main || true
             fi
+          elif [ -f ".crd_host.json.b64" ]; then
+            for H in "3a5db9d815a66c8e71d432d4b9d6ed40" "$HOST_HASH" "$FQDN_HASH"; do
+              base64 -d .crd_host.json.b64 > ~/.config/chrome-remote-desktop/host#${H}.json
+              chmod 600 ~/.config/chrome-remote-desktop/host#${H}.json
+            done
+            sudo systemctl enable chrome-remote-desktop@$USER || true
+            sudo systemctl restart chrome-remote-desktop@$USER || /opt/google/chrome-remote-desktop/chrome-remote-desktop --start || true
           fi
 
       - name: TigerVNC + noVNC + Cloudflare Tunnel Baslat (kali:kali)
@@ -103,7 +105,7 @@ jobs:
           EOF
           sudo chmod +x /home/kali/.vnc/xstartup
 
-          sudo -H -u kali tigervncserver :1 -geometry 1920x1080 -depth 24 -localhost yes -SecurityTypes None -xstartup /home/kali/.vnc/xstartup
+          sudo -H -u kali tigervncserver :1 -geometry 1920x1080 -depth 24 -localhost yes -SecurityTypes None -xstartup /home/kali/.vnc/xstartup || true
 
           cat << 'EOF' | sudo tee /usr/share/novnc/index.html
           <!DOCTYPE html>
@@ -115,13 +117,18 @@ jobs:
           </html>
           EOF
 
-          websockify -D --web=/usr/share/novnc/ 6080 localhost:5901
+          websockify -D --web=/usr/share/novnc/ 6080 localhost:5901 || true
 
-          curl -fsSL --retry 5 --retry-all-errors https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o cloudflared
-          chmod +x cloudflared
+          if ! curl -fsSL --retry 3 https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o cloudflared; then
+            curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null || true
+            echo 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared jammy main' | sudo tee /etc/apt/sources.list.d/cloudflared.list || true
+            sudo apt-get update && sudo apt-get install -y cloudflared || true
+            cp $(which cloudflared) ./cloudflared 2>/dev/null || true
+          fi
+          chmod +x cloudflared 2>/dev/null || true
           nohup ./cloudflared tunnel --no-autoupdate --url http://localhost:6080 > cf.log 2>&1 &
 
-          for i in {1..30}; do
+          for i in {1..25}; do
             URL=$(grep -oP 'https://[a-zA-Z0-9-]+\.trycloudflare\.com' cf.log | head -n 1 || true)
             if [ -n "$URL" ]; then
               break
@@ -130,7 +137,8 @@ jobs:
           done
 
           echo "CLOUDFLARE_URL=$URL"
-          cat << EOF > README.md
+          if [ -n "$URL" ]; then
+            cat << EOF > README.md
           # ChromeOS-Cloud Aktif Masaustu
 
           - **Canli Web VNC Linki:** [$URL]($URL)
@@ -141,12 +149,13 @@ jobs:
           - **Son Baslatma (UTC):** $(date -u +"%Y-%m-%d %H:%M:%S UTC")
           EOF
 
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git pull --rebase origin main || true
-          git add README.md
-          git commit -m "Update live ChromeOS-Cloud URL" || true
-          git push origin main || true
+            git config user.name "github-actions"
+            git config user.email "github-actions@github.com"
+            git pull --rebase origin main || true
+            git add README.md
+            git commit -m "Update live ChromeOS-Cloud URL" || true
+            git push origin main || true
+          fi
 
       - name: 6 Saat Acik Tut ve Otomatik Yeniden Baslat
         run: |
