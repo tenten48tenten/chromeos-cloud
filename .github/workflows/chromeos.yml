@@ -42,16 +42,19 @@ jobs:
 
           # Brave Browser root/kali sandbox hatasi olmadan acilsin
           sudo sed -i 's|Exec=/usr/bin/brave-browser-stable|Exec=/usr/bin/brave-browser-stable --no-sandbox --test-type --password-store=basic|g' /usr/share/applications/brave-browser.desktop || true
-          sudo -u kali mkdir -p /home/kali/Desktop
+          sudo -H -u kali mkdir -p /home/kali/Desktop
           sudo cp /usr/share/applications/brave-browser.desktop /home/kali/Desktop/ || true
           sudo chmod +x /home/kali/Desktop/brave-browser.desktop || true
           sudo chown -R kali:kali /home/kali/Desktop
 
       - name: TigerVNC + noVNC + Cloudflare Tunnel Baslat (kali:kali)
         run: |
-          sudo -u kali mkdir -p /home/kali/.vnc
-          printf "kali\nkali\nn\n" | sudo -u kali vncpasswd
-          cat << 'EOF' | sudo -u kali tee /home/kali/.vnc/xstartup
+          sudo -H -u kali mkdir -p /home/kali/.vnc
+          echo "kali" | tigervncpasswd -f | sudo -H -u kali tee /home/kali/.vnc/passwd > /dev/null
+          sudo chmod 600 /home/kali/.vnc/passwd
+          sudo chown -R kali:kali /home/kali/.vnc
+
+          cat << 'EOF' | sudo -H -u kali tee /home/kali/.vnc/xstartup
           #!/bin/bash
           unset SESSION_MANAGER
           unset DBUS_SESSION_BUS_ADDRESS
@@ -60,14 +63,14 @@ jobs:
           EOF
           sudo chmod +x /home/kali/.vnc/xstartup
 
-          sudo -u kali tigervncserver :1 -geometry 1920x1080 -depth 24 -localhost no -xstartup /home/kali/.vnc/xstartup
+          sudo -H -u kali tigervncserver :1 -geometry 1920x1080 -depth 24 -localhost no -rfbauth /home/kali/.vnc/passwd -xstartup /home/kali/.vnc/xstartup
 
           # noVNC otomatik giris sayfasi
           cat << 'EOF' | sudo tee /usr/share/novnc/index.html
           <!DOCTYPE html>
           <html>
           <head>
-            <meta http-equiv="refresh" content="0; url=vnc.html?autoconnect=true&resize=scale&reconnect=true">
+            <meta http-equiv="refresh" content="0; url=vnc.html?autoconnect=true&resize=scale&reconnect=true&password=kali">
           </head>
           <body>Baglaniyor... (Sifre: kali)</body>
           </html>
@@ -115,20 +118,19 @@ jobs:
             sudo apt-get install -y --no-install-recommends ./crd.deb
             sudo groupadd -f chrome-remote-desktop
             sudo usermod -aG chrome-remote-desktop kali
-            echo "exec /etc/X11/Xsession /usr/bin/xfce4-session" | sudo -u kali tee /home/kali/.chrome-remote-desktop-session
+            echo "exec /etc/X11/Xsession /usr/bin/xfce4-session" | sudo -H -u kali tee /home/kali/.chrome-remote-desktop-session
             sudo bash -c 'echo "exec /etc/X11/Xsession /usr/bin/xfce4-session" > /etc/chrome-remote-desktop-session'
-            sudo -u kali mkdir -p /home/kali/.config/chrome-remote-desktop
+            sudo -H -u kali mkdir -p /home/kali/.config/chrome-remote-desktop
             sudo chmod 700 /home/kali/.config/chrome-remote-desktop
 
             HOST_HASH=$(python3 -c 'import socket,hashlib; print(hashlib.md5(socket.gethostname().encode()).hexdigest())')
 
             if [ -n "$CRD_CMD" ]; then
               CODE=$(echo "$CRD_CMD" | grep -oP '(?<=--code=")[^"]+' || echo "$CRD_CMD")
-              sudo -u kali DISPLAY= /opt/google/chrome-remote-desktop/start-host \
+              sudo -H -u kali DISPLAY= /opt/google/chrome-remote-desktop/start-host \
                 --code="$CODE" \
                 --redirect-url="https://remotedesktop.google.com/_/oauthredirect" \
                 --name="ChromeOS-Cloud" --pin="${PIN:-123456}"
-              # Kaydedilen host.json dosyasini sonraki 6 saatlik oturumlar icin sakla
               HOST_FILE=$(sudo ls /home/kali/.config/chrome-remote-desktop/host#*.json | head -n 1 || true)
               if [ -n "$HOST_FILE" ]; then
                 sudo base64 -w 0 "$HOST_FILE" > .crd_host.json.b64
@@ -138,9 +140,9 @@ jobs:
                 git push origin main || true
               fi
             elif [ -f ".crd_host.json.b64" ]; then
-              base64 -d .crd_host.json.b64 | sudo -u kali tee "/home/kali/.config/chrome-remote-desktop/host#${HOST_HASH}.json" > /dev/null
+              base64 -d .crd_host.json.b64 | sudo -H -u kali tee "/home/kali/.config/chrome-remote-desktop/host#${HOST_HASH}.json" > /dev/null
               sudo chmod 600 "/home/kali/.config/chrome-remote-desktop/host#${HOST_HASH}.json"
-              sudo systemctl start chrome-remote-desktop@kali || sudo -u kali /opt/google/chrome-remote-desktop/chrome-remote-desktop --start || true
+              sudo systemctl start chrome-remote-desktop@kali || sudo -H -u kali /opt/google/chrome-remote-desktop/chrome-remote-desktop --start || true
             fi
           fi
 
