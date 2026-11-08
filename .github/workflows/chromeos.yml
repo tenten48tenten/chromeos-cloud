@@ -103,7 +103,7 @@ jobs:
           EOF
           sudo chmod +x /home/kali/.vnc/xstartup
 
-          sudo -H -u kali tigervncserver :1 -geometry 1920x1080 -depth 24 -localhost no -SecurityTypes None -xstartup /home/kali/.vnc/xstartup
+          sudo -H -u kali tigervncserver :1 -geometry 1920x1080 -depth 24 -localhost yes -SecurityTypes None -xstartup /home/kali/.vnc/xstartup
 
           cat << 'EOF' | sudo tee /usr/share/novnc/index.html
           <!DOCTYPE html>
@@ -150,7 +150,7 @@ jobs:
 
       - name: 6 Saat Acik Tut ve Otomatik Yeniden Baslat
         run: |
-          sleep 20500
+          sleep 18000
           curl -s -X POST \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github+json" \
