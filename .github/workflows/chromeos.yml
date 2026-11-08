@@ -34,26 +34,66 @@ jobs:
         run: |
           export DEBIAN_FRONTEND=noninteractive
           sudo rm -f /var/lib/man-db/auto-update
-          curl -fsSL https://dl.brave.com/install.sh | sh
+          curl -fsSL --retry 5 --retry-all-errors https://dl.brave.com/install.sh | sh
           sudo apt-get install -y --no-install-recommends \
             xfce4 xfce4-terminal thunar dbus-x11 x11-xserver-utils \
             tigervnc-standalone-server tigervnc-common novnc websockify \
-            fonts-liberation fonts-dejavu-core pulseaudio ca-certificates
+            fonts-liberation fonts-dejavu-core pulseaudio ca-certificates xvfb
 
-          # Brave Browser root/kali sandbox hatasi olmadan acilsin
           sudo sed -i 's|Exec=/usr/bin/brave-browser-stable|Exec=/usr/bin/brave-browser-stable --no-sandbox --test-type --password-store=basic|g' /usr/share/applications/brave-browser.desktop || true
+          mkdir -p /home/runner/Desktop
+          cp /usr/share/applications/brave-browser.desktop /home/runner/Desktop/ || true
+          chmod +x /home/runner/Desktop/brave-browser.desktop || true
           sudo -H -u kali mkdir -p /home/kali/Desktop
           sudo cp /usr/share/applications/brave-browser.desktop /home/kali/Desktop/ || true
           sudo chmod +x /home/kali/Desktop/brave-browser.desktop || true
           sudo chown -R kali:kali /home/kali/Desktop
 
+      - name: Google Chrome Remote Desktop (ChromeOS-Cloud) Baslat (Kalici/Persistent)
+        env:
+          CRD_CMD: ${{ github.event.inputs.crd_code }}
+          PIN: ${{ github.event.inputs.pin }}
+        run: |
+          if [ -n "$CRD_CMD" ] || [ -f ".crd_host.json.b64" ]; then
+            export DEBIAN_FRONTEND=noninteractive
+            curl -fsSL --retry 5 --retry-all-errors https://dl.google.com/linux/direct/chrome-remote-desktop_current_amd64.deb -o crd.deb
+            sudo apt-get install -y ./crd.deb
+            sudo groupadd -f chrome-remote-desktop
+            sudo usermod -aG chrome-remote-desktop $USER
+            sudo usermod -aG chrome-remote-desktop kali
+            echo "exec /etc/X11/Xsession /usr/bin/xfce4-session" > ~/.chrome-remote-desktop-session
+            sudo bash -c 'echo "exec /etc/X11/Xsession /usr/bin/xfce4-session" > /etc/chrome-remote-desktop-session'
+            mkdir -p ~/.config/chrome-remote-desktop
+            chmod 700 ~/.config/chrome-remote-desktop
+
+            HOST_HASH=$(python3 -c 'import socket,hashlib; print(hashlib.md5(socket.gethostname().encode()).hexdigest())')
+
+            if [ -n "$CRD_CMD" ]; then
+              CODE=$(echo "$CRD_CMD" | grep -oP '(?<=--code=")[^"]+' || echo "$CRD_CMD")
+              DISPLAY= /opt/google/chrome-remote-desktop/start-host \
+                --code="$CODE" \
+                --redirect-url="https://remotedesktop.google.com/_/oauthredirect" \
+                --name="ChromeOS-Cloud" --pin="${PIN:-123456}" || true
+              HOST_FILE=$(ls ~/.config/chrome-remote-desktop/host#*.json 2>/dev/null | head -n 1 || true)
+              if [ -n "$HOST_FILE" ]; then
+                base64 -w 0 "$HOST_FILE" > .crd_host.json.b64
+                git config user.name "github-actions"
+                git config user.email "github-actions@github.com"
+                git pull --rebase origin main || true
+                git add .crd_host.json.b64
+                git commit -m "Save persistent ChromeOS-Cloud CRD host token" || true
+                git push origin main || true
+              fi
+            elif [ -f ".crd_host.json.b64" ]; then
+              base64 -d .crd_host.json.b64 > ~/.config/chrome-remote-desktop/host#${HOST_HASH}.json
+              chmod 600 ~/.config/chrome-remote-desktop/host#${HOST_HASH}.json
+              sudo systemctl start chrome-remote-desktop@$USER || /opt/google/chrome-remote-desktop/chrome-remote-desktop --start || true
+            fi
+          fi
+
       - name: TigerVNC + noVNC + Cloudflare Tunnel Baslat (kali:kali)
         run: |
           sudo -H -u kali mkdir -p /home/kali/.vnc
-          echo "kali" | tigervncpasswd -f | sudo -H -u kali tee /home/kali/.vnc/passwd > /dev/null
-          sudo chmod 600 /home/kali/.vnc/passwd
-          sudo chown -R kali:kali /home/kali/.vnc
-
           cat << 'EOF' | sudo -H -u kali tee /home/kali/.vnc/xstartup
           #!/bin/bash
           unset SESSION_MANAGER
@@ -63,22 +103,21 @@ jobs:
           EOF
           sudo chmod +x /home/kali/.vnc/xstartup
 
-          sudo -H -u kali tigervncserver :1 -geometry 1920x1080 -depth 24 -localhost no -rfbauth /home/kali/.vnc/passwd -xstartup /home/kali/.vnc/xstartup
+          sudo -H -u kali tigervncserver :1 -geometry 1920x1080 -depth 24 -localhost no -SecurityTypes None -xstartup /home/kali/.vnc/xstartup
 
-          # noVNC otomatik giris sayfasi
           cat << 'EOF' | sudo tee /usr/share/novnc/index.html
           <!DOCTYPE html>
           <html>
           <head>
-            <meta http-equiv="refresh" content="0; url=vnc.html?autoconnect=true&resize=scale&reconnect=true&password=kali">
+            <meta http-equiv="refresh" content="0; url=vnc.html?autoconnect=true&resize=scale&reconnect=true">
           </head>
-          <body>Baglaniyor... (Sifre: kali)</body>
+          <body>Baglaniyor...</body>
           </html>
           EOF
 
           websockify -D --web=/usr/share/novnc/ 6080 localhost:5901
 
-          curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o cloudflared
+          curl -fsSL --retry 5 --retry-all-errors https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o cloudflared
           chmod +x cloudflared
           nohup ./cloudflared tunnel --no-autoupdate --url http://localhost:6080 > cf.log 2>&1 &
 
@@ -97,54 +136,17 @@ jobs:
           - **Canli Web VNC Linki:** [$URL]($URL)
           - **Kullanici Adi:** \`kali\`
           - **VNC / Sistem / Root Sifresi:** \`kali\`
+          - **Google Remote Desktop PIN:** \`123456\`
           - **Tarayici:** Brave Browser (Masaustunde hazir)
           - **Son Baslatma (UTC):** $(date -u +"%Y-%m-%d %H:%M:%S UTC")
           EOF
 
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
+          git pull --rebase origin main || true
           git add README.md
           git commit -m "Update live ChromeOS-Cloud URL" || true
           git push origin main || true
-
-      - name: Google Chrome Remote Desktop (ChromeOS-Cloud) Baslat (Kalici/Persistent)
-        env:
-          CRD_CMD: ${{ github.event.inputs.crd_code }}
-          PIN: ${{ github.event.inputs.pin }}
-        run: |
-          if [ -n "$CRD_CMD" ] || [ -f ".crd_host.json.b64" ]; then
-            export DEBIAN_FRONTEND=noninteractive
-            curl -fsSL https://dl.google.com/linux/direct/chrome-remote-desktop_current_amd64.deb -o crd.deb
-            sudo apt-get install -y --no-install-recommends ./crd.deb
-            sudo groupadd -f chrome-remote-desktop
-            sudo usermod -aG chrome-remote-desktop kali
-            echo "exec /etc/X11/Xsession /usr/bin/xfce4-session" | sudo -H -u kali tee /home/kali/.chrome-remote-desktop-session
-            sudo bash -c 'echo "exec /etc/X11/Xsession /usr/bin/xfce4-session" > /etc/chrome-remote-desktop-session'
-            sudo -H -u kali mkdir -p /home/kali/.config/chrome-remote-desktop
-            sudo chmod 700 /home/kali/.config/chrome-remote-desktop
-
-            HOST_HASH=$(python3 -c 'import socket,hashlib; print(hashlib.md5(socket.gethostname().encode()).hexdigest())')
-
-            if [ -n "$CRD_CMD" ]; then
-              CODE=$(echo "$CRD_CMD" | grep -oP '(?<=--code=")[^"]+' || echo "$CRD_CMD")
-              sudo -H -u kali DISPLAY= /opt/google/chrome-remote-desktop/start-host \
-                --code="$CODE" \
-                --redirect-url="https://remotedesktop.google.com/_/oauthredirect" \
-                --name="ChromeOS-Cloud" --pin="${PIN:-123456}"
-              HOST_FILE=$(sudo ls /home/kali/.config/chrome-remote-desktop/host#*.json | head -n 1 || true)
-              if [ -n "$HOST_FILE" ]; then
-                sudo base64 -w 0 "$HOST_FILE" > .crd_host.json.b64
-                git pull --rebase origin main || true
-                git add .crd_host.json.b64
-                git commit -m "Save persistent ChromeOS-Cloud CRD host token" || true
-                git push origin main || true
-              fi
-            elif [ -f ".crd_host.json.b64" ]; then
-              base64 -d .crd_host.json.b64 | sudo -H -u kali tee "/home/kali/.config/chrome-remote-desktop/host#${HOST_HASH}.json" > /dev/null
-              sudo chmod 600 "/home/kali/.config/chrome-remote-desktop/host#${HOST_HASH}.json"
-              sudo systemctl start chrome-remote-desktop@kali || sudo -H -u kali /opt/google/chrome-remote-desktop/chrome-remote-desktop --start || true
-            fi
-          fi
 
       - name: 6 Saat Acik Tut ve Otomatik Yeniden Baslat
         run: |
