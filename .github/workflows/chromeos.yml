@@ -26,11 +26,12 @@ jobs:
 
       - name: Kullanici (kali:kali) ve Root (root:kali) Ayarla
         run: |
-          sudo useradd -m -s /bin/bash -G sudo kali 2>/dev/null || true
+          sudo useradd -m -s /bin/bash -G sudo,audio,pulse,pulse-access kali 2>/dev/null || true
+          sudo usermod -aG audio,pulse,pulse-access $USER 2>/dev/null || true
           echo -e "kali:kali\nroot:kali\nrunner:kali" | sudo chpasswd
           echo "kali ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/kali
 
-      - name: XFCE4, TigerVNC, noVNC ve Brave Browser Kurulumu
+      - name: XFCE4, Ses (PulseAudio), TigerVNC, noVNC ve Brave Browser Kurulumu
         run: |
           export DEBIAN_FRONTEND=noninteractive
           sudo rm -f /var/lib/man-db/auto-update
@@ -38,7 +39,9 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             xfce4 xfce4-terminal thunar dbus-x11 x11-xserver-utils \
             tigervnc-standalone-server tigervnc-common novnc websockify \
-            fonts-liberation fonts-dejavu-core pulseaudio ca-certificates xvfb
+            fonts-liberation fonts-dejavu-core ca-certificates xvfb \
+            pulseaudio pulseaudio-utils pavucontrol xfce4-pulseaudio-plugin \
+            alsa-utils libasound2-plugins gstreamer1.0-pulseaudio gstreamer1.0-plugins-good
 
           sudo sed -i 's|Exec=/usr/bin/brave-browser-stable|Exec=/usr/bin/brave-browser-stable --no-sandbox --test-type --password-store=basic|g' /usr/share/applications/brave-browser.desktop || true
           mkdir -p /home/runner/Desktop
@@ -49,7 +52,7 @@ jobs:
           sudo chmod +x /home/kali/Desktop/brave-browser.desktop || true
           sudo chown -R kali:kali /home/kali/Desktop
 
-      - name: Google Chrome Remote Desktop (ChromeOS-Cloud) Baslat (Kalici/Persistent)
+      - name: Google Chrome Remote Desktop (ChromeOS-Cloud) + Ses Baslat (Kalici/Persistent)
         env:
           CRD_CMD: ${{ github.event.inputs.crd_code }}
           PIN: ${{ github.event.inputs.pin }}
@@ -58,10 +61,19 @@ jobs:
           curl -fsSL --retry 5 --retry-all-errors https://dl.google.com/linux/direct/chrome-remote-desktop_current_amd64.deb -o crd.deb
           sudo apt-get install -y ./crd.deb
           sudo groupadd -f chrome-remote-desktop
-          sudo usermod -aG chrome-remote-desktop $USER
-          sudo usermod -aG chrome-remote-desktop kali
-          echo "exec /etc/X11/Xsession /usr/bin/xfce4-session" > ~/.chrome-remote-desktop-session
-          sudo bash -c 'echo "exec /etc/X11/Xsession /usr/bin/xfce4-session" > /etc/chrome-remote-desktop-session'
+          sudo usermod -aG chrome-remote-desktop,audio,pulse,pulse-access $USER
+          sudo usermod -aG chrome-remote-desktop,audio,pulse,pulse-access kali
+
+          cat << 'EOF' > ~/.chrome-remote-desktop-session
+          #!/bin/bash
+          pulseaudio --start --exit-idle-time=-1 2>/dev/null || true
+          pactl load-module module-null-sink sink_name=chrome_remote_desktop_session sink_properties=device.description="Chrome_Remote_Desktop" 2>/dev/null || true
+          pactl set-default-sink chrome_remote_desktop_session 2>/dev/null || true
+          exec /etc/X11/Xsession /usr/bin/xfce4-session
+          EOF
+          chmod +x ~/.chrome-remote-desktop-session
+          sudo cp ~/.chrome-remote-desktop-session /etc/chrome-remote-desktop-session
+
           mkdir -p ~/.config/chrome-remote-desktop
           chmod 700 ~/.config/chrome-remote-desktop
 
