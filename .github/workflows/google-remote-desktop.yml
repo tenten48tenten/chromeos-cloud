@@ -4,11 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       crd_code:
-        description: 'Google Remote Desktop Kodunuz'
-        required: true
+        description: 'Google Remote Desktop Kodunuz (Kayitli token varsa bos birakabilirsiniz)'
+        required: false
+        default: ''
       pin:
         description: 'PIN (6 haneli)'
-        required: true
+        required: false
         default: '123456'
 
 jobs:
@@ -16,6 +17,9 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 360
     steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
       - name: CRD ve XFCE Kur
         run: |
           sudo apt-get update
@@ -34,18 +38,36 @@ jobs:
           mkdir -p ~/.config/chrome-remote-desktop
           chmod 700 ~/.config/chrome-remote-desktop
 
-      - name: Yetkilendir ve Baslat
+      - name: Yetkilendir ve Baslat (Kayitli Token ile Tek Tikla)
         env:
           CRD_CMD: ${{ github.event.inputs.crd_code }}
           PIN: ${{ github.event.inputs.pin }}
         run: |
-          CODE=$(echo "$CRD_CMD" | grep -oP '(?<=--code=")[^"]+')
-          DISPLAY= /opt/google/chrome-remote-desktop/start-host \
-            --code="$CODE" \
-            --redirect-url="https://remotedesktop.google.com/_/oauthredirect" \
-            --name="ChromeOS-Cloud" --pin="$PIN"
+          if [ -n "$CRD_CMD" ]; then
+            CODE=$(echo "$CRD_CMD" | grep -oP '(?<=--code=")[^"]+' || echo "$CRD_CMD")
+            DISPLAY= /opt/google/chrome-remote-desktop/start-host \
+              --code="$CODE" \
+              --redirect-url="https://remotedesktop.google.com/_/oauthredirect" \
+              --name="ChromeOS-Cloud" --pin="${PIN:-123456}"
+          elif [ -f ".crd_host.json.b64" ]; then
+            HOST_HASH=$(python3 -c 'import socket,hashlib; print(hashlib.md5(socket.gethostname().encode()).hexdigest())')
+            FQDN_HASH=$(python3 -c 'import socket,hashlib; print(hashlib.md5(socket.getfqdn().encode()).hexdigest())')
+            for H in "$HOST_HASH" "$FQDN_HASH" "92bc0475-87f9-4371-8b95-b063be20c839"; do
+              base64 -d .crd_host.json.b64 > ~/.config/chrome-remote-desktop/host#${H}.json
+              chmod 600 ~/.config/chrome-remote-desktop/host#${H}.json
+            done
+            sudo systemctl enable chrome-remote-desktop@$USER || true
+            sudo systemctl restart chrome-remote-desktop@$USER || /opt/google/chrome-remote-desktop/chrome-remote-desktop --start || true
+          fi
           sleep 5
           tail -n 50 /tmp/chrome_remote_desktop_* 2>/dev/null || true
 
-      - name: Oturumu 6 Saat Acik Tut
-        run: sleep 21600
+      - name: Oturumu 6 Saat Acik Tut ve Otomatik Yeniden Baslat
+        run: |
+          sleep 21000
+          curl -s -X POST \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/google-remote-desktop.yml/dispatches" \
+            -d '{"ref":"main"}' || true
+          sleep 600
