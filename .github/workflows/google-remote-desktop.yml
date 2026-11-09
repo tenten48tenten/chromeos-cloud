@@ -12,6 +12,9 @@ on:
         required: false
         default: '123456'
 
+permissions:
+  contents: write
+
 jobs:
   remote-desktop:
     runs-on: ubuntu-22.04
@@ -23,8 +26,8 @@ jobs:
       - name: CRD, Ses (PulseAudio) ve XFCE Kur
         run: |
           sudo apt-get update
-          curl -sL https://dl.google.com/linux/direct/chrome-remote-desktop_current_amd64.deb -o crd.deb
-          curl -sL https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb -o chrome.deb
+          curl -fsSL https://dl.google.com/linux/direct/chrome-remote-desktop_current_amd64.deb -o crd.deb
+          curl -fsSL https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb -o chrome.deb
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ./crd.deb ./chrome.deb xfce4 xfce4-goodies xfce4-terminal desktop-base dbus-x11 xscreensaver pulseaudio pulseaudio-utils pavucontrol alsa-utils libasound2-plugins
           sudo apt-get remove -y gnome-terminal || true
           sudo systemctl disable lightdm.service || true
@@ -46,6 +49,54 @@ jobs:
 
           mkdir -p ~/.config/chrome-remote-desktop
           chmod 700 ~/.config/chrome-remote-desktop
+
+      - name: Varsa Yedek İmajı Geri Yükle
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p /tmp/backup /home/runner/Desktop /home/runner/Downloads
+          if gh release download latest-backup --pattern "yedek_imaj.tar.gz" --dir /tmp/backup 2>/dev/null; then
+            echo "Önceki yedek bulundu, açılıyor..."
+            tar -xzf /tmp/backup/yedek_imaj.tar.gz -C /home/runner/ || true
+            echo "Yedek başarıyla yüklendi!"
+          else
+            echo "Önceki yedek bulunamadı, sıfır ortamla başlatılıyor."
+          fi
+
+      - name: Masaüstüne Hızlı Yedek Alma Butonu Ekle
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p /home/runner/Desktop
+          cat << 'EOF' > /home/runner/yedek_al.sh
+          #!/bin/bash
+          export GH_TOKEN="${GITHUB_TOKEN}"
+          echo "==============================================="
+          echo "HIZLI YEDEKLEME BAŞLATILIYOR..."
+          echo "==============================================="
+          mkdir -p /tmp/backup_out
+          tar --exclude='.cache' --exclude='*.deb' -czf /tmp/backup_out/yedek_imaj.tar.gz -C /home/runner Desktop Downloads .config/google-chrome 2>/dev/null || true
+          if [ -f "/tmp/backup_out/yedek_imaj.tar.gz" ]; then
+            gh release view latest-backup 2>/dev/null || gh release create latest-backup --title "ChromeOS-Cloud Live Backup" --notes "Canli sistem snapshot yedeği"
+            gh release upload latest-backup /tmp/backup_out/yedek_imaj.tar.gz --clobber
+            echo "YEDEK BASARIYLA GITHUB'A YUKLENDI!"
+          fi
+          EOF
+          chmod +x /home/runner/yedek_al.sh
+
+          cat << 'EOF' > /home/runner/Desktop/YEDEK_AL.desktop
+          [Desktop Entry]
+          Version=1.0
+          Type=Application
+          Name=TEK TIKLA YEDEK AL
+          Comment=Masaüstü ve Chrome verilerini GitHub'a kaydet
+          Exec=/home/runner/yedek_al.sh
+          Icon=system-file-manager
+          Path=/home/runner
+          Terminal=true
+          StartupNotify=false
+          EOF
+          chmod +x /home/runner/Desktop/YEDEK_AL.desktop
 
       - name: Yetkilendir ve Baslat (Kayitli Token ile Tek Tikla)
         env:
@@ -73,3 +124,17 @@ jobs:
           sleep 21000
           curl -s -X POST -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${{ github.repository }}/actions/workflows/google-remote-desktop.yml/dispatches" -d '{"ref":"main"}' || true
           sleep 600
+
+      - name: Kapanirken Otomatik Son Imaj Al
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Makine kapaniyor, son durum GitHub'a yedekleniyor..."
+          mkdir -p /tmp/final_backup
+          tar --exclude='.cache' --exclude='*.deb' -czf /tmp/final_backup/yedek_imaj.tar.gz -C /home/runner Desktop Downloads .config/google-chrome 2>/dev/null || true
+          if [ -f "/tmp/final_backup/yedek_imaj.tar.gz" ]; then
+            gh release view latest-backup 2>/dev/null || gh release create latest-backup --title "ChromeOS-Cloud Live Backup" --notes "Otomatik sistem snapshot yedeği"
+            gh release upload latest-backup /tmp/final_backup/yedek_imaj.tar.gz --clobber || true
+            echo "Son imaj yedeği GitHub'a başarıyla mühürlendi!"
+          fi
