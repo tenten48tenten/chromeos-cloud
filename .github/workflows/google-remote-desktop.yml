@@ -20,21 +20,30 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: CRD ve XFCE Kur
+      - name: CRD, Ses (PulseAudio) ve XFCE Kur
         run: |
           sudo apt-get update
           curl -sL https://dl.google.com/linux/direct/chrome-remote-desktop_current_amd64.deb -o crd.deb
           curl -sL https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb -o chrome.deb
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ./crd.deb ./chrome.deb xfce4 xfce4-goodies xfce4-terminal desktop-base dbus-x11 xscreensaver
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ./crd.deb ./chrome.deb xfce4 xfce4-goodies xfce4-terminal desktop-base dbus-x11 xscreensaver pulseaudio pulseaudio-utils pavucontrol alsa-utils libasound2-plugins
           sudo apt-get remove -y gnome-terminal || true
           sudo systemctl disable lightdm.service || true
 
-      - name: Kullanici Oturumunu Hazirla
+      - name: Kullanici Oturumunu ve Sesi Hazirla
         run: |
           sudo groupadd -f chrome-remote-desktop
-          sudo usermod -aG chrome-remote-desktop $USER
-          echo "exec /etc/X11/Xsession /usr/bin/xfce4-session" > ~/.chrome-remote-desktop-session
-          sudo bash -c 'echo "exec /etc/X11/Xsession /usr/bin/xfce4-session" > /etc/chrome-remote-desktop-session'
+          sudo usermod -aG chrome-remote-desktop,audio,pulse $USER
+
+          cat << 'EOF' > ~/.chrome-remote-desktop-session
+          #!/bin/bash
+          pulseaudio --start --exit-idle-time=-1 2>/dev/null || true
+          pactl load-module module-null-sink sink_name=chrome_remote_desktop_session sink_properties=device.description="Chrome_Remote_Desktop" 2>/dev/null || true
+          pactl set-default-sink chrome_remote_desktop_session 2>/dev/null || true
+          exec /etc/X11/Xsession /usr/bin/xfce4-session
+          EOF
+          chmod +x ~/.chrome-remote-desktop-session
+          sudo cp ~/.chrome-remote-desktop-session /etc/chrome-remote-desktop-session
+
           mkdir -p ~/.config/chrome-remote-desktop
           chmod 700 ~/.config/chrome-remote-desktop
 
@@ -47,27 +56,4 @@ jobs:
             CODE=$(echo "$CRD_CMD" | grep -oP '(?<=--code=")[^"]+' || echo "$CRD_CMD")
             DISPLAY= /opt/google/chrome-remote-desktop/start-host \
               --code="$CODE" \
-              --redirect-url="https://remotedesktop.google.com/_/oauthredirect" \
-              --name="ChromeOS-Cloud" --pin="${PIN:-123456}"
-          elif [ -f ".crd_host.json.b64" ]; then
-            HOST_HASH=$(python3 -c 'import socket,hashlib; print(hashlib.md5(socket.gethostname().encode()).hexdigest())')
-            FQDN_HASH=$(python3 -c 'import socket,hashlib; print(hashlib.md5(socket.getfqdn().encode()).hexdigest())')
-            for H in "$HOST_HASH" "$FQDN_HASH" "92bc0475-87f9-4371-8b95-b063be20c839"; do
-              base64 -d .crd_host.json.b64 > ~/.config/chrome-remote-desktop/host#${H}.json
-              chmod 600 ~/.config/chrome-remote-desktop/host#${H}.json
-            done
-            sudo systemctl enable chrome-remote-desktop@$USER || true
-            sudo systemctl restart chrome-remote-desktop@$USER || /opt/google/chrome-remote-desktop/chrome-remote-desktop --start || true
-          fi
-          sleep 5
-          tail -n 50 /tmp/chrome_remote_desktop_* 2>/dev/null || true
-
-      - name: Oturumu 6 Saat Acik Tut ve Otomatik Yeniden Baslat
-        run: |
-          sleep 21000
-          curl -s -X POST \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/google-remote-desktop.yml/dispatches" \
-            -d '{"ref":"main"}' || true
-          sleep 600
+              --redirect-url="https
