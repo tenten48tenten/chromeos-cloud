@@ -26,8 +26,8 @@ jobs:
 
       - name: Kullanici (kali:kali) ve Root (root:kali) Ayarla
         run: |
-          sudo useradd -m -s /bin/bash -G sudo,audio,pulse,pulse-access kali 2>/dev/null || true
-          sudo usermod -aG audio,pulse,pulse-access $USER 2>/dev/null || true
+          sudo id -u kali >/dev/null 2>&1 || sudo useradd -m -s /bin/bash -G sudo,audio kali
+          sudo usermod -aG audio $USER 2>/dev/null || true
           echo -e "kali:kali\nroot:kali\nrunner:kali" | sudo chpasswd
           echo "kali ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/kali
 
