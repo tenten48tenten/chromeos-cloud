@@ -36,8 +36,9 @@ jobs:
           export DEBIAN_FRONTEND=noninteractive
           sudo rm -f /var/lib/man-db/auto-update
           curl -fsSL --retry 5 --retry-all-errors https://dl.brave.com/install.sh | sh || true
-          sudo apt-get install -y --no-install-recommends \
-            xfce4 xfce4-terminal thunar dbus-x11 x11-xserver-utils \
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            xfce4 xfce4-goodies xfce4-terminal thunar desktop-base dbus-x11 x11-xserver-utils \
             tigervnc-standalone-server tigervnc-common novnc websockify \
             fonts-liberation fonts-dejavu-core ca-certificates xvfb \
             pulseaudio pulseaudio-utils pavucontrol xfce4-pulseaudio-plugin \
@@ -112,6 +113,8 @@ jobs:
           #!/bin/bash
           unset SESSION_MANAGER
           unset DBUS_SESSION_BUS_ADDRESS
+          export XDG_CONFIG_DIRS=/etc/xdg
+          export XDG_DATA_DIRS=/usr/local/share:/usr/share
           export XKL_XMODMAP_DISABLE=1
           exec dbus-launch --exit-with-session startxfce4
           EOF
