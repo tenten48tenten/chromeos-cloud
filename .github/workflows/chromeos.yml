@@ -53,6 +53,22 @@ jobs:
           sudo chmod +x /home/kali/Desktop/brave-browser.desktop || true
           sudo chown -R kali:kali /home/kali/Desktop
 
+      - name: GitHub Release Uzerinden Yedek Imajı Geri Yukle
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p /tmp/backup
+          if gh release download latest-backup --pattern "yedek_imaj.tar.gz" --dir /tmp/backup -R ${{ github.repository }} 2>/dev/null; then
+            echo "Yedek imaj indirildi, /home/kali ve /home/runner icine aktariliyor..."
+            sudo tar -xzf /tmp/backup/yedek_imaj.tar.gz -C /home/kali/ || true
+            sudo tar -xzf /tmp/backup/yedek_imaj.tar.gz -C /home/runner/ || true
+            sudo chown -R kali:kali /home/kali || true
+            sudo chown -R runner:runner /home/runner || true
+            echo "Yedek imaj basariyla sisteme yerlestirildi!"
+          else
+            echo "Yedek indirilemedi, varsayilan ortamla devam ediliyor."
+          fi
+
       - name: Google Chrome Remote Desktop (ChromeOS-Cloud) + Ses Baslat (Kalici/Persistent)
         env:
           CRD_CMD: ${{ github.event.inputs.crd_code }}
