@@ -148,17 +148,18 @@ jobs:
 
           sudo -H -u kali tigervncserver :1 -geometry 1920x1080 -depth 24 -localhost yes -SecurityTypes None -xstartup /home/kali/.vnc/xstartup || true
 
+          websockify -D --web=/usr/share/novnc/ 6080 localhost:5901 || true
+          websockify -D --web=/usr/share/novnc/ 6080 127.0.0.1:5901 || true
+
           cat << 'EOF' | sudo tee /usr/share/novnc/index.html
           <!DOCTYPE html>
           <html>
           <head>
-            <meta http-equiv="refresh" content="0; url=vnc.html?autoconnect=true&resize=scale&reconnect=true">
+            <meta http-equiv="refresh" content="0; url=vnc.html?autoconnect=true&resize=scale&reconnect=true&path=websockify">
           </head>
           <body>Baglaniyor...</body>
           </html>
           EOF
-
-          websockify -D --web=/usr/share/novnc/ 6080 localhost:5901 || true
 
           if ! curl -fsSL --retry 3 https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o cloudflared; then
             curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null || true
