@@ -123,6 +123,8 @@ jobs:
           fi
 
       - name: TigerVNC + noVNC + Cloudflare Tunnel Baslat (kali:kali)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           sudo -H -u kali mkdir -p /home/kali/.vnc /home/kali/.config/xfce4
           sudo chown -R kali:kali /home/kali
