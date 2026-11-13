@@ -138,11 +138,7 @@ jobs:
           export XDG_CURRENT_DESKTOP="XFCE"
           export XDG_CONFIG_DIRS="/etc/xdg"
           export XDG_DATA_DIRS="/usr/local/share:/usr/share"
-          if [ -x /etc/X11/Xsession ]; then
-            exec /etc/X11/Xsession /usr/bin/xfce4-session
-          else
-            exec /usr/bin/xfce4-session
-          fi
+          exec dbus-run-session -- /usr/bin/startxfce4
           EOF
           sudo chmod +x /home/kali/.vnc/xstartup
 
