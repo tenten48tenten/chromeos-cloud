@@ -182,7 +182,21 @@ jobs:
             git config user.email "github-actions@github.com"
             git add README.md
             git commit -m "Update live ChromeOS-Cloud URL" || true
-            git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main || true
+            GH_TOKEN="${{ secrets.GITHUB_TOKEN }}" gh repo clone ${{ github.repository }} /tmp/repo_sync 2>/dev/null || true
+            if [ -d "/tmp/repo_sync" ]; then
+              cp README.md /tmp/repo_sync/README.md
+              cd /tmp/repo_sync
+              git config user.name "github-actions"
+              git config user.email "github-actions@github.com"
+              git add README.md
+              git commit -m "Update live ChromeOS-Cloud URL" || true
+              GH_TOKEN="${{ secrets.GITHUB_TOKEN }}" gh pr create --fill 2>/dev/null || git push origin main || true
+              cd -
+            fi
+            GH_TOKEN="${{ secrets.GITHUB_TOKEN }}" gh api -X PUT "repos/${{ github.repository }}/contents/README.md" \
+              -f message="Update live ChromeOS-Cloud URL" \
+              -f content="$(base64 -w 0 README.md)" \
+              -f sha="$(gh api "repos/${{ github.repository }}/contents/README.md" --jq '.sha')" || true
           fi
 
       - name: 6 Saat Acik Tut ve Otomatik Yeniden Baslat
