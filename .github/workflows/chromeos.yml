@@ -111,21 +111,21 @@ jobs:
           sudo -H -u kali mkdir -p /home/kali/.vnc /home/kali/.config/xfce4
           sudo chown -R kali:kali /home/kali
           cat << 'EOF' | sudo -H -u kali tee /home/kali/.vnc/xstartup
-#!/bin/sh
-unset SESSION_MANAGER
-unset DBUS_SESSION_BUS_ADDRESS
-export HOME=/home/kali
-export USER=kali
-export LOGNAME=kali
-export XDG_CURRENT_DESKTOP="XFCE"
-export XDG_CONFIG_DIRS="/etc/xdg"
-export XDG_DATA_DIRS="/usr/local/share:/usr/share"
-if [ -x /etc/X11/Xsession ]; then
-  exec /etc/X11/Xsession /usr/bin/xfce4-session
-else
-  exec /usr/bin/xfce4-session
-fi
-EOF
+          #!/bin/sh
+          unset SESSION_MANAGER
+          unset DBUS_SESSION_BUS_ADDRESS
+          export HOME=/home/kali
+          export USER=kali
+          export LOGNAME=kali
+          export XDG_CURRENT_DESKTOP="XFCE"
+          export XDG_CONFIG_DIRS="/etc/xdg"
+          export XDG_DATA_DIRS="/usr/local/share:/usr/share"
+          if [ -x /etc/X11/Xsession ]; then
+            exec /etc/X11/Xsession /usr/bin/xfce4-session
+          else
+            exec /usr/bin/xfce4-session
+          fi
+          EOF
           sudo chmod +x /home/kali/.vnc/xstartup
 
           sudo -H -u kali tigervncserver :1 -geometry 1920x1080 -depth 24 -localhost yes -SecurityTypes None -xstartup /home/kali/.vnc/xstartup || true
