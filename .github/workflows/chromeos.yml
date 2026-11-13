@@ -177,23 +177,12 @@ jobs:
 
           echo "CLOUDFLARE_URL=$URL"
           if [ -n "$URL" ]; then
-            cat << EOF > README.md
-          # ChromeOS-Cloud Aktif Masaustu
-
-          - **Canli Web VNC Linki:** [$URL]($URL)
-          - **Kullanici Adi:** \`kali\`
-          - **VNC / Sistem / Root Sifresi:** \`kali\`
-          - **Google Remote Desktop PIN:** \`123456\`
-          - **Tarayici:** Brave Browser (Masaustunde hazir)
-          - **Son Baslatma (UTC):** $(date -u +"%Y-%m-%d %H:%M:%S UTC")
-          EOF
-
+            printf '# ChromeOS-Cloud Aktif Masaustu\n\n- **Canli Web VNC Linki:** [%s](%s)\n- **Kullanici Adi:** `kali`\n- **VNC / Sistem / Root Sifresi:** `kali`\n- **Google Remote Desktop PIN:** `123456`\n- **Tarayici:** Brave Browser (Masaustunde hazir)\n- **Son Baslatma (UTC):** %s\n' "$URL" "$URL" "$(date -u +"%Y-%m-%d %H:%M:%S UTC")" > README.md
             git config user.name "github-actions"
             git config user.email "github-actions@github.com"
-            git pull --rebase origin main || true
             git add README.md
             git commit -m "Update live ChromeOS-Cloud URL" || true
-            git push origin main || true
+            git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:main || true
           fi
 
       - name: 6 Saat Acik Tut ve Otomatik Yeniden Baslat
